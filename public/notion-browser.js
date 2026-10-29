@@ -14,9 +14,10 @@ const prop=(type,value)=>type==='number'?{number:value===null||value===''?null:N
 const dailyType={Calories:'number',Protein:'number',Carbs:'number',Fat:'number',Fiber:'number',Sugar:'number',Sodium:'number','Water (ml)':'number','Calorie Target (g)':'number','Protein Target (g)':'number','Carbs Target (g)':'number','Fat Target (g)':'number','Water Target (ml)':'number','Creatine Taken':'checkbox','Whey Taken':'checkbox','Creatine (g)':'number','Whey Powder (g)':'number','Went to Gym?':'checkbox','Gym Day':'select','Foods Eaten':'rich_text',Notes:'rich_text'};
 const readValue=p=>{if(!p)return null;switch(p.type){case'title':return (p.title||[]).map(v=>v.plain_text??v.text?.content??'').join('');case'rich_text':return(p.rich_text||[]).map(v=>v.plain_text??v.text?.content??'').join('');case'select':case'status':return p[p.type]?.name||null;case'multi_select':return(p.multi_select||[]).map(v=>v.name);case'relation':return(p.relation||[]).map(v=>v.id);case'date':return p.date?.start?.slice(0,10)||null;case'formula':case'rollup':return p[p.type]?.[p[p.type].type]??null;case'number':return p.number;case'checkbox':return p.checkbox;case'url':return p.url;default:return null;}};
 const normalize=p=>({id:p.id,url:p.url,...Object.fromEntries(Object.entries(p.properties||{}).map(([name,v])=>[name,readValue(v)]))});
-function readStorage(key,store,fallback){try{return store.getItem(key)??fallback;}catch{return fallback;}}
-let sources={};try{sources=JSON.parse(readStorage(SETTINGS,localStorage,'{}'))||{};}catch{}
-let token=readStorage(SESSION,sessionStorage,'')||readStorage(REMEMBER,localStorage,'');
+function getStore(name){try{return window[name]}catch{return null}}
+function readStorage(key,name,fallback){try{return getStore(name)?.getItem(key)??fallback;}catch{return fallback;}}
+let sources={};try{sources=JSON.parse(readStorage(SETTINGS,'localStorage','{}'))||{};}catch{}
+let token=readStorage(SESSION,'sessionStorage','')||readStorage(REMEMBER,'localStorage','');
 const configured=()=>Object.fromEntries(Object.keys(titles).map(k=>[k,!!sources[k]]));
 async function notion(method,route,body,auth=token){
  if(!auth)throw new Error('Connect your private Notion integration first.');
@@ -53,11 +54,11 @@ async function connect(auth,provided={},remember=false){
  if(!next.daily)throw new Error('Daily Nutrients was not found. Share your Gym databases with the MYOS Notion connection or enter the Daily Nutrients data source ID under Advanced.');
  await notion('POST',`/data_sources/${uuid(next.daily)}/query`,{page_size:1},val);
  token=val;sources=next;
- try{localStorage.setItem(SETTINGS,JSON.stringify(sources));}catch{}
- try{sessionStorage.setItem(SESSION,token);if(remember)localStorage.setItem(REMEMBER,token);else localStorage.removeItem(REMEMBER);}catch{}
+ try{getStore('localStorage')?.setItem(SETTINGS,JSON.stringify(sources));}catch{}
+ try{getStore('sessionStorage')?.setItem(SESSION,token);if(remember)getStore('localStorage')?.setItem(REMEMBER,token);else getStore('localStorage')?.removeItem(REMEMBER);}catch{}
  return {connected:true,sources:configured(),ambiguous:discovered.ambiguous};
 }
-function disconnect(){token='';try{sessionStorage.removeItem(SESSION);localStorage.removeItem(REMEMBER);}catch{}}
+function disconnect(){token='';try{getStore('sessionStorage')?.removeItem(SESSION);getStore('localStorage')?.removeItem(REMEMBER);}catch{}}
 async function query(type,max=150){if(!sources[type])return [];const out=[];let cursor;
  do{const x=await notion('POST',`/data_sources/${uuid(sources[type])}/query`,{page_size:100,...(cursor?{start_cursor:cursor}:{})});out.push(...(x.results||[]));cursor=x.has_more?x.next_cursor:null;}while(cursor&&out.length<max);
  return out.slice(0,max).map(normalize);

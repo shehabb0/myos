@@ -8,9 +8,10 @@
   <meta name="description" content="MYOS — your personal fitness, nutrition, goals and progress dashboard." />
   <title>MYOS — Fitness Studio</title>
   <link rel="icon" href="./public/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="./public/styles.css" />
-  <script defer src="./public/notion-browser.js"></script>
-  <script defer src="./public/app.js"></script>
+  <script>try{const t=localStorage.getItem("myos-theme-v1");document.documentElement.dataset.theme=t==="dark"||t==="light"?t:(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");}catch{document.documentElement.dataset.theme="light"}</script>
+  <link rel="stylesheet" href="./public/styles.css?v=2" />
+  <script defer src="./public/notion-browser.js?v=2"></script>
+  <script defer src="./public/app.js?v=2"></script>
 </head>
 <body>
 <div id="app" class="shell">
@@ -27,6 +28,7 @@
       <a href="#body" data-route="body" class="nav-link"><span data-icon="activity"></span> Body progress</a>
       <a href="#goals" data-route="goals" class="nav-link"><span data-icon="target"></span> Goals</a>
       <a href="#analytics" data-route="analytics" class="nav-link"><span data-icon="chart"></span> Analytics</a>
+      <a href="#settings" data-route="settings" class="nav-link"><span data-icon="settings"></span> Settings & Notion</a>
     </nav>
     <div class="sidebar-bottom">
       <div class="sidebar-mini-card">
@@ -35,15 +37,15 @@
         <p>Small actions. Stronger habits. Your own pace.</p>
         <div class="stripe"></div>
       </div>
-      <a href="#settings" data-route="settings" class="nav-link settings-link"><span data-icon="settings"></span> Settings</a>
-      <div class="profile-row"><div class="profile-avatar">F</div><div><b>My Studio</b><small id="mode-label">Personal workspace</small></div><span class="profile-dot"></span></div>
+
+      <div class="profile-row"><div class="profile-avatar">M</div><div><b>My Studio</b><small id="mode-label">Personal workspace</small></div><span class="profile-dot"></span></div>
     </div>
   </aside>
   <div class="page-wrap">
     <header class="topbar">
       <div class="mobile-brand"><button id="menu-toggle" aria-label="Open menu" class="icon-button"><span data-icon="menu"></span></button><b>MYOS.</b></div>
       <div class="crumb" id="breadcrumb"><span class="crumb-parent">MY SPACE</span><span class="crumb-sep">/</span><strong>Overview</strong></div>
-      <div class="header-right"><span id="connection-badge" class="connection-pill"><span class="green-dot"></span> Demo mode</span><span class="header-divider"></span><button class="icon-button" id="refresh-button" title="Refresh from Notion"><span data-icon="refresh"></span></button><div class="top-avatar">F</div></div>
+      <div class="header-right"><button type="button" id="quick-connect" class="btn btn-accent btn-sm quick-connect-btn" data-action="connect">Connect Notion</button><button type="button" id="theme-toggle" class="icon-button theme-toggle" data-action="theme-toggle" aria-label="Enable dark mode" title="Toggle dark mode"><span data-icon="moon"></span></button><span id="connection-badge" class="connection-pill"><span class="green-dot"></span> Demo mode</span><span class="header-divider"></span><button class="icon-button" id="refresh-button" title="Refresh from Notion"><span data-icon="refresh"></span></button><div class="top-avatar">M</div></div>
     </header>
     <main id="main-content" tabindex="-1"><div class="loading-screen"><span class="loading-ring"></span><p>Loading your studio…</p></div></main>
   </div>

@@ -18,6 +18,7 @@ if(opts.method==='POST'&&url.endsWith('/pages'))return response({...page,id:'bbb
 throw Error('Unexpected '+url);
 }
 const context={window:{},localStorage:store(),sessionStorage:store(),fetch,console,setTimeout};
+context.window.localStorage=context.localStorage;context.window.sessionStorage=context.sessionStorage;
 vm.runInNewContext(fs.readFileSync(__dirname+'/../public/notion-browser.js','utf8'),context);
 const api=context.window.MYOS_NOTION;
 (async()=>{
