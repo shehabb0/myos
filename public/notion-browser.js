@@ -94,6 +94,35 @@ async function route(url,options={}){
   properties['Foods Eaten']=prop('rich_text',[day['Foods Eaten'],entry].filter(Boolean).join('\n'));
   return {ok:true,day:normalize(await notion('PATCH',`/pages/${day.id}`,{properties}))};
  }
+
+ if(url==='/api/plan/add'){
+  if(!dateValid(b.date)||!b.planId)throw new Error('Choose a valid day and meal');
+  const plan=(await query('planner',400)).find(x=>uuid(x.id)===uuid(b.planId));
+  if(!plan)throw new Error('Planned meal not found in Notion');
+  const dayOfWeek=new Date(b.date+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'long',timeZone:'UTC'});
+  if(!(plan.Date===b.date||(!plan.Date&&plan.Schedule===dayOfWeek)))throw new Error('This meal is not planned for the selected day');
+  const servings=plan.Servings==null?1:Number(plan.Servings);
+  if(!Number.isFinite(servings)||servings<=0||servings>50)throw new Error('Set a valid serving count in your Meal Planner');
+  const linkedId=Array.isArray(plan.Meal)?plan.Meal[0]:null;
+  if(!linkedId)throw new Error('This planned entry is not linked to a saved meal');
+  const meal=(await query('meals',400)).find(x=>uuid(x.id)===uuid(linkedId));
+  if(!meal)throw new Error('Saved meal not found. Check Notion access to Meal Database');
+  if(meal.Calories==null||!Number.isFinite(Number(meal.Calories)))throw new Error('This saved meal is missing calorie data');
+  const cleanName=String(meal['Meal Name']||plan.Entry||'Meal').replace(/[\r\n]+/g,' ').trim();
+  const line=[plan.Slot||'Meal',cleanName,servings+' serving'+(servings===1?'':'s')].join(' · ');
+  const day=await ensureDay(b.date);
+  if(String(day['Foods Eaten']||'').split(/\r?\n/).some(entry=>entry.trim()===line)){
+   return {ok:true,alreadyAdded:true,day};
+  }
+  const properties={};
+  for(const field of ['Calories','Protein','Carbs','Fat','Fiber','Sugar','Sodium']){
+   const amount=Number(meal[field]??0);
+   if(!Number.isFinite(amount))throw new Error('Invalid '+field+' value in the saved meal');
+   properties[field]=prop('number',Math.round(((Number(day[field])||0)+amount*servings)*10)/10);
+  }
+  properties['Foods Eaten']=prop('rich_text',[day['Foods Eaten'],line].filter(Boolean).join('\n'));
+  return {ok:true,alreadyAdded:false,day:normalize(await notion('PATCH','/pages/'+day.id,{properties}))};
+ }
  if(url==='/api/plan'){
   if(!dateValid(b.date)||!b.mealId||!['Breakfast','Lunch','Dinner','Snack'].includes(b.slot))throw new Error('Choose a valid meal and date');
   const meal=(await query('meals',250)).find(x=>x.id===b.mealId);if(!meal)throw new Error('Meal not found');
