@@ -157,6 +157,17 @@ async function route(url,options={}){
   properties['Foods Eaten']=prop('rich_text',[day['Foods Eaten'],line].filter(Boolean).join('\n'));
   return {ok:true,alreadyAdded:false,day:normalize(await notion('PATCH','/pages/'+day.id,{properties}))};
  }
+
+ if(url==='/api/plan/delete'){
+  if(!dateValid(b.date)||!b.planId)throw new Error('Choose a valid day and planned meal');
+  const plan=(await query('planner',400)).find(row=>uuid(row.id)===uuid(b.planId));
+  if(!plan)throw new Error('Planned meal not found in Notion');
+  const dayName=new Date(b.date+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'long',timeZone:'UTC'});
+  if(!(plan.Date===b.date||(!plan.Date&&plan.Schedule===dayName)))throw new Error('This entry does not belong to the selected day');
+  const result=await notion('PATCH','/pages/'+uuid(plan.id),{in_trash:true});
+  if(result.in_trash!==true&&result.archived!==true)throw new Error('Notion did not confirm removing this entry');
+  return {ok:true};
+ }
  if(url==='/api/plan'){
   if(!dateValid(b.date)||!b.mealId||!['Breakfast','Lunch','Dinner','Snack'].includes(b.slot))throw new Error('Choose a valid meal and date');
   const meal=(await query('meals',250)).find(x=>x.id===b.mealId);if(!meal)throw new Error('Meal not found');

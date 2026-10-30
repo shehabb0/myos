@@ -104,3 +104,9 @@ html[data-theme="dark"] .kcal-ring text{fill:#f0f8e7}
   .connection-pill{display:none}
   .theme-settings-row{flex-wrap:wrap}
 }
+/* Separate remove-from-plan action, kept away from the add/unadd button. */
+.planned-meal-row{position:relative;padding-left:30px}
+.plan-delete-btn{position:absolute;top:5px;left:5px;display:grid;place-items:center;width:19px;height:19px;border:0;border-radius:6px;background:transparent;color:#95a495;font-size:18px;font-weight:500;line-height:1;cursor:pointer;transition:background .15s,color .15s}
+.plan-delete-btn:hover,.plan-delete-btn:focus-visible{background:#ffebea;color:#ae4444;outline:2px solid transparent}
+html[data-theme="dark"] .plan-delete-btn{color:#a6b7a5}
+html[data-theme="dark"] .plan-delete-btn:hover,html[data-theme="dark"] .plan-delete-btn:focus-visible{background:#543b3a;color:#ffb2aa}
