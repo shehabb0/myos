@@ -70,7 +70,7 @@ async function bootstrap(){const result={};const keys=Object.keys(titles);
 }
 async function ensureDay(date){let day=(await query('daily',300)).find(d=>d.Date===date);if(day)return day;
  const targets=await query('targets',40),goal=targets.find(t=>t.Status==='Active')||targets[0]||{};
- const fields={Entry:prop('title','Daily Log'),Date:prop('date',date),'Calorie Target (g)':prop('number',goal['Daily Calories (kcal)']||2100),'Protein Target (g)':prop('number',goal['Protein (g)']||125),'Carbs Target (g)':prop('number',goal['Carbs (g)']||265),'Fat Target (g)':prop('number',goal['Fat (g)']||60),'Water Target (ml)':prop('number',goal['Water (ml)']||3000)};
+ const fields={Entry:prop('title','Daily Log'),Date:prop('date',date),'Calorie Target (g)':prop('number',goal['Daily Calories (kcal)']||2250),'Protein Target (g)':prop('number',goal['Protein (g)']||120),'Carbs Target (g)':prop('number',goal['Carbs (g)']||295),'Fat Target (g)':prop('number',goal['Fat (g)']||65),'Water Target (ml)':prop('number',goal['Water (ml)']||3000)};
  return normalize(await notion('POST','/pages',{parent:{type:'data_source_id',data_source_id:uuid(sources.daily)},properties:fields}));
 }
 async function route(url,options={}){
