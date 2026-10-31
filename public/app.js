@@ -182,8 +182,6 @@ async function importInbodyPhoto(file){
  inbodyFile=file||null;
  if(inbodyPreviewUrl){URL.revokeObjectURL(inbodyPreviewUrl);inbodyPreviewUrl=null;}
  preview.hidden=true;preview.removeAttribute('src');
- const cropReview=$('#inbody-center-proof'),cropImage=$('#inbody-center-image');
- if(cropReview){cropReview.hidden=true;cropImage?.removeAttribute('src')}
  if(!file){status.textContent='Choose a photo to prefill your measurements, or enter them manually.';return;}
  if(!/^image\/(?:jpeg|png|webp|bmp)$/i.test(file.type)||file.size>20*1024*1024){
   status.textContent='Choose a JPG, PNG, or WebP image under 20 MB.';inbodyFile=null;return;
@@ -195,7 +193,6 @@ async function importInbodyPhoto(file){
  try{
   if(!window.MYOS_INBODY)throw new Error('Image reader is unavailable; refresh Myos and try again.');
   const result=await window.MYOS_INBODY.scan(file,msg=>{if(status.isConnected)status.textContent=msg;});
-  if(result.trunkPreview&&cropReview&&cropImage){cropImage.src=result.trunkPreview;cropReview.hidden=false;}
   const fields=['date','weight','bodyFat','bodyFatMass','muscleMass','segmentalFat'];
   let found=0;
   for(const key of fields){
@@ -338,7 +335,7 @@ function weightModal(){
   +'<div class="inbody-upload"><label class="form-label" for="inbody-file">InBody report photo (optional)</label>'
   +'<input id="inbody-file" type="file" accept="image/jpeg,image/png,image/webp" class="form-control inbody-file-input" />'
   +'<div class="inbody-preview-row"><img id="inbody-preview" alt="Selected InBody report" hidden /><p id="inbody-status" role="status" aria-live="polite">Choose a photo to prefill your measurements.</p></div>'
-  +'<div class="inbody-center-proof" id="inbody-center-proof" hidden><span>Center of Segmental Fat Analysis — verify the kg number here</span><img id="inbody-center-image" alt="Enlarged crop used to read the central trunk fat value" /></div></div>'
+  +'</div>'
   +'<div class="source-note inbody-review-note">For Trunk Fat Mass, use the number in kg at the center of Segmental Fat Analysis, never the % underneath. Please verify all imported measurements before saving. You can still attach your original scan to the Notion weigh-in page.</div>'
   +'<div class="form-row"><div class="form-group"><label class="form-label" for="inbody-date">Scan date</label><input class="form-control" id="inbody-date" name="date" type="date" value="'+esc(S.date)+'" required></div>'
   +'<div class="form-group"><label class="form-label" for="inbody-weight">Body weight (kg) *</label><input class="form-control" id="inbody-weight" name="weight" type="number" step="0.1" min="25" max="250" placeholder="Enter weight" required></div></div>'

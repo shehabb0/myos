@@ -350,7 +350,6 @@ async function readBodyWeight(worker,bitmap,data){
    const result=await worker.recognize(file);
    const text=String(result?.data?.text||'');
    const values=parse(text);
-   let trunkPreview=null;
    // For photos that lose the weight row in the full-page OCR, check a
    // dedicated composition-table crop before leaving the field blank.
    let bitmap=null;
@@ -375,16 +374,13 @@ async function readBodyWeight(worker,bitmap,data){
      }catch(err){/* Keep previously read values for review. */}
      reconcileBodyFatMass(values);
      try{
-      let selectedRect=null;
-      const trunk=await readTrunkCenter(worker,bitmap,text,values.bodyFatMass,onProgress,result.data,rect=>{selectedRect=rect});
+      const trunk=await readTrunkCenter(worker,bitmap,text,values.bodyFatMass,onProgress,result.data);
       if(trunk!==null)values.segmentalFat=trunk;
-      const region=selectedRect||trunkRegionCandidates(result.data,bitmap.width,bitmap.height,inBodyLayout(text))[0];
-      if(region){try{const canvas=makeRegionCanvas(bitmap,region,4,false);trunkPreview=canvas?.toDataURL?.('image/png')||null}catch(e){/* Preview is optional. */}}
      }catch(err){/* Leave trunk fat blank rather than guessing. */}
     }
    }finally{bitmap?.close?.();}
    reconcileBodyFatMass(values);
-   return {values,text,confidence:result?.data?.confidence??null,trunkPreview};
+   return {values,text,confidence:result?.data?.confidence??null};
   }finally{if(worker)await worker.terminate();}
  }
  window.MYOS_INBODY={parse,scan,trunkCandidate,centralFatFromSection,trunkRegionCandidates,headingBasedTrunkRegion,weightFromText,bodyFatMassFromText,reconcileBodyFatMass,profileRegions,inBodyLayout,plausibleTrunk,muscleRegion,smmFromSection};

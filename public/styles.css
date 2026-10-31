@@ -144,11 +144,3 @@ html[data-theme="dark"] .inbody-preview-row p,html[data-theme="dark"] .inbody-at
 .inbody-extra{margin-top:4px;padding:12px 13px;border:1px solid var(--line);border-radius:11px}
 .inbody-extra summary{cursor:pointer;font-weight:700;font-size:12px;color:var(--ink)}
 .inbody-extra .form-row{margin-top:14px}
-
-/* Show exactly which center measurement was OCR'd from the photo. */
-.inbody-center-proof{display:flex;flex-direction:column;gap:7px;margin-top:12px;padding:11px;border:1px solid #b8d0ae;border-radius:10px;background:#edf4e7}
-.inbody-center-proof[hidden]{display:none!important}
-.inbody-center-proof span{font-size:11px;font-weight:700;color:#415a42}
-.inbody-center-proof img{width:auto;max-width:min(100%,290px);max-height:100px;object-fit:contain;border-radius:7px;background:#fff}
-html[data-theme="dark"] .inbody-center-proof{background:#253b2a;border-color:#426847}
-html[data-theme="dark"] .inbody-center-proof span{color:#c4dec1}
