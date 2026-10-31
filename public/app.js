@@ -302,9 +302,146 @@ function nutrition(){const day=currentDay(),parts=[['Calories',day.Calories,tar(
 function foodLibraryList(){const foods=(S.data.foods||[]).filter(x=>(x['Food Name']||'').toLowerCase().includes(S.search.toLowerCase())).slice(0,12);return foods.length?foods.map(f=>`<div class="meal-row"><div class="meal-circle">🥬</div><div class="meal-name"><b>${esc(f['Food Name']||'Food')}</b><small>Per 100 g · ${fmt(num(f['Protein / g'])*100,1)} g protein</small></div><div class="meal-kcal">${fmt(num(f['Calories / g'])*100)} <small>kcal</small></div><button class="btn btn-light btn-sm" data-action="open-food" data-food="${esc(f.id)}">${icon('plus',13)}</button></div>`).join(''):emptyState('No matching foods','Try another food name.');}
 function exercises(){const all=(S.data.exercises||[]),filtered=all.filter(x=>(S.filter==='All'||x.PPL===S.filter)&&((x.Name||'').toLowerCase().includes(S.search.toLowerCase())||(x['Main Focus']||'').toLowerCase().includes(S.search.toLowerCase())));return `${pageHeading('Train with purpose.','Your existing Notion exercise library, displayed without changing it.',`<a class="btn btn-outline" href="https://app.notion.com/p/40863193f4578028b3a9ed7ed190779a" target="_blank" rel="noopener noreferrer">${icon('external')} Open in Notion</a>`,false)}<div class="section-grid"><section class="card">${sectionTitle('Your weekly schedule','CONSISTENCY FIRST')}<table class="schedule-table">${['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map(x=>`<tr><td>${x}</td><td><span class="schedule-tag ${['Monday','Tuesday','Wednesday'].includes(x)?'rest':''}">${['Monday','Tuesday','Wednesday'].includes(x)?'Home / rest':'Gym'}</span></td></tr>`).join('')}</table></section><section class="card">${sectionTitle('Training principles','KEEP IT SIMPLE')}<div class="details-stack"><div><span class="pill">01</span><h3 style="margin:12px 0 7px;font-size:13px">Progressive overload</h3><p class="page-subtitle">If your working range is 8–12 reps, improve technique and reach the top of the range before increasing load.</p></div><div class="divider"></div><div><span class="pill">02</span><h3 style="margin:12px 0 7px;font-size:13px">Recover between sessions</h3><p class="page-subtitle">Give trained muscles adequate recovery. The routine in Notion recommends roughly 48 hours for abs.</p></div></div></section></div><div class="page-wide">${sectionTitle(`Exercise library <span class="pill ghost">${filtered.length} of ${all.length}</span>`,'ORGANIZED YOUR WAY')}<div class="filter-row"><div class="search-input">${icon('search')}<input id="exercise-search" placeholder="Search exercises, muscles, focus…" value="${esc(S.search)}"></div>${['All','Push','Pull','Leg','Abs','Cardio'].map(x=>`<button class="filter-chip ${S.filter===x?'selected':''}" data-action="filter" data-filter="${x}">${x}</button>`).join('')}</div><div class="exercise-grid" id="exercise-grid">${exerciseCards(filtered)}</div></div>`;}
 function exerciseCards(items){return items.length?items.map(x=>`<article class="card exercise-card"><div class="exercise-top"><div class="equipment-icon">${icon('dumbbell',26)}</div><span class="pill">${esc(x.PPL||'Training')}</span></div><div class="exercise-content"><div class="exercise-title">${esc((x.Name||'').replace(/<[^>]*>/g,'').trim())}</div><p class="exercise-desc">${esc((x['Main Focus']||'').replace(/<[^>]*>/g,'').slice(0,100))||'A great addition to your training.'}</p><div class="exercise-meta"><div><small>SETS</small><strong>${esc((x.Sets||[]).join(', ')||'—')}</strong></div><div><small>REPS</small><strong>${esc(x.Reps||'—')}</strong></div><div><small>WEIGHT</small><strong>${esc(x.Weight||'—')}</strong></div></div>${x.url&&safeUrl(x.url)!=='#'?`<a class="exercise-footer" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener noreferrer">View in Notion ${icon('external',13)}</a>`:`<span class="exercise-footer">READ-ONLY LIBRARY</span>`}</div></article>`).join(''):emptyState('No exercises found','Try a different filter or search.');}
-function chartSvg(items,field,options={}){const vals=items.map(x=>({date:x.Date, value:num(x[field])})).filter(x=>x.value>0&&x.date).sort((a,b)=>a.date.localeCompare(b.date)).slice(-12);if(vals.length<2)return `<div class="chart-empty">${icon('chart',27)}Not enough entries to show a trend yet.</div>`;
- const min=Math.min(...vals.map(x=>x.value)),max=Math.max(...vals.map(x=>x.value)),pad=Math.max((max-min)*.3,options.pad||1),lo=Math.max(0,min-pad),hi=max+pad;const w=650,h=224,left=28,right=20,top=19,bottom=30,x=i=>left+(w-left-right)*i/(vals.length-1),y=v=>top+(h-top-bottom)*(1-(v-lo)/(hi-lo||1));const pts=vals.map((v,i)=>`${x(i)},${y(v.value)}`).join(' ');const area=`M${x(0)} ${h-bottom} L${vals.map((v,i)=>`${x(i)} ${y(v.value)}`).join(' L')} L${x(vals.length-1)} ${h-bottom} Z`;
- return `<div class="chart-holder"><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="${esc(field)} trend"><defs><linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#a7c9a2" stop-opacity=".35"/><stop offset="100%" stop-color="#a7c9a2" stop-opacity="0"/></linearGradient></defs>${Array.from({length:4},(_,i)=>{const gy=top+i*(h-top-bottom)/3;const vv=hi-i*(hi-lo)/3;return `<line class="chart-gridline" x1="${left}" y1="${gy}" x2="${w-right}" y2="${gy}"/><text x="0" y="${gy+4}" class="chart-label">${fmt(vv,1)}</text>`}).join('')}<path d="${area}" class="chart-area"/><polyline points="${pts}" class="chart-line"/>${vals.map((v,i)=>`<circle class="chart-dot" cx="${x(i)}" cy="${y(v.value)}" r="4"/>`).join('')}${vals.filter((v,i)=>i===0||i===vals.length-1||i===Math.floor((vals.length-1)/2)).map(v=>{const i=vals.indexOf(v);return `<text x="${x(i)}" y="${h-6}" class="chart-label" text-anchor="middle">${dateLabel(v.date,{month:'short',day:'numeric'})}</text>`}).join('')}</svg></div>`;}
+function chartSvg(items,field,options={}){
+ const vals=items.map(item=>({
+  date:item.Date,
+  value:num(item[field]),
+  bodyFat:item['Body Fat Percentage (PBF)']??item.Fat,
+  smm:item['Skeletal Muscle Mass (SMM)']??item['Muscle Mass (kg)']
+ })).filter(v=>v.date&&v.value>0).sort((a,b)=>a.date.localeCompare(b.date)).slice(-12);
+ if(!vals.length)return `<div class="chart-empty">${icon('chart',27)}No weigh-ins yet. Add a measurement to start your trend.</div>`;
+ const min=Math.min(...vals.map(v=>v.value)),max=Math.max(...vals.map(v=>v.value));
+ const pad=Math.max((max-min)*.3,options.pad||1),lo=Math.max(0,min-pad),hi=max+pad;
+ const w=650,h=224,left=28,right=20,top=19,bottom=30;
+ const x=i=>vals.length===1?left+(w-left-right)/2:left+(w-left-right)*i/(vals.length-1);
+ const y=value=>top+(h-top-bottom)*(1-(value-lo)/(hi-lo||1));
+ const pts=vals.map((v,i)=>`${x(i)},${y(v.value)}`).join(' ');
+ const area=vals.length<2?'':`M${x(0)} ${h-bottom} L${vals.map((v,i)=>`${x(i)} ${y(v.value)}`).join(' L')} L${x(vals.length-1)} ${h-bottom} Z`;
+ const positions=vals.map((v,i)=>{
+  const start=i===0?left-12:(x(i-1)+x(i))/2;
+  const end=i===vals.length-1?w-right+12:(x(i)+x(i+1))/2;
+  const diff=i===0?null:Math.round((v.value-vals[i-1].value)*10)/10;
+  const fat=v.bodyFat==null?'':fmt(num(v.bodyFat)*100,1);
+  const muscle=v.smm==null?'':fmt(num(v.smm),1);
+  return `<g class="weight-chart-point" data-weight-point data-index="${i}" data-date="${esc(v.date)}" data-weight="${v.value}" data-delta="${diff??''}" data-fat="${fat}" data-smm="${muscle}" data-x="${(x(i)/w*100).toFixed(4)}" data-y="${(y(v.value)/h*100).toFixed(4)}" tabindex="0" role="button" aria-label="${esc(dateLabel(v.date,{year:'numeric',month:'long',day:'numeric'}))}: ${fmt(v.value,1)} kilograms${diff==null?'':`, ${diff>0?'+':''}${fmt(diff,1)} kilograms since previous weigh-in`}. Tap or press Enter for details.">
+    <rect class="weight-chart-hit" x="${start}" y="${top-15}" width="${end-start}" height="${h-bottom-top+27}" fill="transparent" />
+    <line class="weight-chart-guide" x1="${x(i)}" y1="${top}" x2="${x(i)}" y2="${h-bottom}" />
+    <circle class="weight-chart-halo" cx="${x(i)}" cy="${y(v.value)}" r="10" />
+    <circle class="chart-dot" cx="${x(i)}" cy="${y(v.value)}" r="4.3"/>
+  </g>`;
+ }).join('');
+ const bottomLabels=vals.filter((v,i)=>i===0||i===vals.length-1||i===Math.floor((vals.length-1)/2))
+  .map(v=>{const i=vals.indexOf(v);return `<text x="${x(i)}" y="${h-6}" class="chart-label" text-anchor="middle">${dateLabel(v.date,{month:'short',day:'numeric'})}</text>`}).join('');
+ return `<div class="chart-holder chart-holder-interactive" data-weight-chart>
+  <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="group" aria-label="Body weight trend. Hover, tap, or focus a point to view its recorded details.">
+   <defs><linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#a7c9a2" stop-opacity=".35"/><stop offset="100%" stop-color="#a7c9a2" stop-opacity="0"/></linearGradient></defs>
+   ${Array.from({length:4},(_,i)=>{const gy=top+i*(h-top-bottom)/3;const vv=hi-i*(hi-lo)/3;return `<line class="chart-gridline" x1="${left}" y1="${gy}" x2="${w-right}" y2="${gy}"/><text x="0" y="${gy+4}" class="chart-label">${fmt(vv,1)}</text>`}).join('')}
+   ${area?`<path d="${area}" class="chart-area"/><polyline points="${pts}" class="chart-line"/>`:''}
+   ${bottomLabels}
+   ${positions}
+  </svg>
+  <div class="weight-chart-tooltip" role="tooltip" hidden>
+   <div class="weight-tooltip-eyebrow">WEIGH-IN</div>
+   <div class="weight-tooltip-value"></div>
+   <div class="weight-tooltip-date"></div>
+   <div class="weight-tooltip-change" hidden></div>
+   <div class="weight-tooltip-extra" hidden></div>
+  </div>
+ </div><div class="weight-chart-help">Hover or tap a point to see the date and measurements.</div>`;
+}
+function showWeightChartPoint(point){
+ const chart=point.closest('[data-weight-chart]'),tooltip=chart?.querySelector('.weight-chart-tooltip');
+ if(!chart||!tooltip)return;
+ chart.querySelectorAll('.weight-chart-point.is-active').forEach(el=>el.classList.remove('is-active'));
+ point.classList.add('is-active');
+ chart.dataset.selectedIndex=point.dataset.index;
+ const date=point.dataset.date||'';
+ const weight=Number(point.dataset.weight);
+ tooltip.querySelector('.weight-tooltip-value').textContent=weight.toFixed(1)+' kg';
+ tooltip.querySelector('.weight-tooltip-date').textContent=/^\d{4}-\d{2}-\d{2}$/.test(date)?dateLabel(date,{year:'numeric',month:'long',day:'numeric'}):date;
+ const changeEl=tooltip.querySelector('.weight-tooltip-change');
+ const d=point.dataset.delta;
+ changeEl.hidden=d==='';
+ if(d!==''){
+  const delta=Number(d),sign=delta>0?'+':'';
+  changeEl.textContent=delta===0?'No change since previous weigh-in':`${sign}${delta.toFixed(1)} kg since previous weigh-in`;
+  changeEl.dataset.direction=delta>0?'up':delta<0?'down':'flat';
+ }
+ const extras=[];
+ if(point.dataset.fat!=='')extras.push(point.dataset.fat+'% body fat');
+ if(point.dataset.smm!=='')extras.push(point.dataset.smm+' kg skeletal muscle');
+ const extraEl=tooltip.querySelector('.weight-tooltip-extra');
+ extraEl.hidden=extras.length===0;
+ extraEl.textContent=extras.join(' · ');
+ tooltip.hidden=false;
+ const rawX=chart.clientWidth*Number(point.dataset.x)/100;
+ const rawY=chart.clientHeight*Number(point.dataset.y)/100;
+ const half=tooltip.offsetWidth/2;
+ tooltip.style.left=Math.max(half+8,Math.min(chart.clientWidth-half-8,rawX))+'px';
+ tooltip.style.top=rawY+'px';
+ tooltip.dataset.placement=rawY<125?'below':'above';
+}
+function hideWeightChart(chart){
+ if(!chart)return;
+ chart.querySelectorAll('.weight-chart-point.is-active').forEach(el=>el.classList.remove('is-active'));
+ const tooltip=chart.querySelector('.weight-chart-tooltip');
+ if(tooltip)tooltip.hidden=true;
+ delete chart.dataset.selectedIndex;
+}
+function toggleWeightChartPin(point){
+ const chart=point.closest('[data-weight-chart]');
+ if(!chart)return;
+ const wasPinned=chart.dataset.pinned==='true'&&chart.dataset.selectedIndex===point.dataset.index;
+ chart.dataset.pinned=wasPinned?'false':'true';
+ if(wasPinned)hideWeightChart(chart);else showWeightChartPoint(point);
+}
+function attachWeightChartInteraction(){
+ document.addEventListener('pointerover',event=>{
+  const point=event.target.closest?.('[data-weight-point]');
+  if(point)showWeightChartPoint(point);
+ });
+ document.addEventListener('pointerout',event=>{
+  const chart=event.target.closest?.('[data-weight-chart]');
+  if(chart&&!chart.contains(event.relatedTarget)&&chart.dataset.pinned!=='true')hideWeightChart(chart);
+ });
+ document.addEventListener('focusin',event=>{
+  const point=event.target.closest?.('[data-weight-point]');
+  if(point)showWeightChartPoint(point);
+ });
+ document.addEventListener('focusout',event=>{
+  const chart=event.target.closest?.('[data-weight-chart]');
+  if(chart&&!chart.contains(event.relatedTarget)&&chart.dataset.pinned!=='true')hideWeightChart(chart);
+ });
+ document.addEventListener('click',event=>{
+  const point=event.target.closest?.('[data-weight-point]');
+  if(point){
+   toggleWeightChartPin(point);
+  }else if(!event.target.closest?.('[data-weight-chart]')){
+   document.querySelectorAll('[data-weight-chart][data-pinned="true"]').forEach(chart=>{
+    chart.dataset.pinned='false';hideWeightChart(chart);
+   });
+  }
+ });
+ document.addEventListener('keydown',event=>{
+  const point=event.target.closest?.('[data-weight-point]');
+  if(!point)return;
+  const chart=point.closest('[data-weight-chart]'),points=[...chart.querySelectorAll('[data-weight-point]')];
+  if(event.key==='ArrowRight'||event.key==='ArrowLeft'){
+   event.preventDefault();
+   const i=points.indexOf(point),next=points[Math.max(0,Math.min(points.length-1,i+(event.key==='ArrowRight'?1:-1)))];
+   next?.focus();return;
+  }
+  if(event.key==='Enter'||event.key===' '){
+   event.preventDefault();toggleWeightChartPin(point);
+  }else if(event.key==='Escape'){
+   event.preventDefault();chart.dataset.pinned='false';hideWeightChart(chart);point.blur();
+  }
+ });
+ window.addEventListener('resize',()=>{
+  const chart=document.querySelector('[data-weight-chart]'),point=chart?.querySelector('.weight-chart-point.is-active');
+  if(point)showWeightChartPoint(point);
+ });
+}
 function body(){const items=[...(S.data.body||[])].filter(x=>x.Date).sort((a,b)=>a.Date.localeCompare(b.Date)),last=items.at(-1),prev=items.at(-2),delta=last&&prev?num(last['Body Weight'])-num(prev['Body Weight']):0;return `${pageHeading('More than a number.','Track trends, not single weigh-ins. All measurements stay personal.',`<button class="btn btn-accent" data-action="open-weight">${icon('plus')} Add weigh-in</button>`)}<div class="trend-cards"><section class="card"><div class="eyebrow">LATEST WEIGHT</div><div class="trend-number">${last?fmt(last['Body Weight'],1):'—'} <small>kg</small></div><div class="trend-kicker">${last?dateLabel(last.Date):'No readings yet'}</div></section><section class="card"><div class="eyebrow">CHANGE SINCE PREVIOUS</div><div class="trend-number">${last&&prev?(delta>0?'+':'')+fmt(delta,1):'—'} <small>kg</small></div><div class="trend-kicker">Changes can reflect hydration and timing.</div></section><section class="card"><div class="eyebrow">MEASUREMENTS</div><div class="trend-number">${items.length}</div><div class="trend-kicker">Recorded check-ins</div></section></div><section class="card">${sectionTitle('Body weight over time','YOUR LONG-TERM TREND')}${chartSvg(items,'Body Weight',{pad:1})}<div class="source-note">A consistent morning weigh-in routine is more informative than any one day's number. Device body-fat percentages are estimates and can fluctuate.</div></section><section class="card page-wide">${sectionTitle('Measurement history','WHAT YOU HAVE RECORDED')}<div class="meal-list">${items.length?items.slice().reverse().map(x=>`<div class="meal-row"><div class="meal-circle">⚖️</div><div class="meal-name"><b>${dateLabel(x.Date,{year:'numeric',month:'short',day:'numeric'})}</b><small>${x.Waist?fmt(x.Waist,1)+' cm waist · ':''}${(x['Body Fat Percentage (PBF)']??x.Fat)!=null?fmt((x['Body Fat Percentage (PBF)']??x.Fat)*100,1)+'% body fat · ':''}${(x['Body Fat Mass']??x['Fat (kg)'])!=null?fmt(x['Body Fat Mass']??x['Fat (kg)'],1)+' kg fat · ':''}${(x['Skeletal Muscle Mass (SMM)']??x['Muscle Mass (kg)'])!=null?fmt(x['Skeletal Muscle Mass (SMM)']??x['Muscle Mass (kg)'],1)+' kg SMM':''}</small></div><div class="meal-kcal">${fmt(x['Body Weight'],1)} <small>kg</small></div></div>`).join(''):emptyState('No measurements yet','Add your first weigh-in to see progress.')}</div></section>`;}
 function goals(){const goals=S.data.goals||[],active=goals.filter(g=>g.Status==='Active').length;return `${pageHeading('Keep your eyes on it.','Big results begin with a few meaningful goals.',`<a class="btn btn-outline" target="_blank" rel="noopener noreferrer" href="https://app.notion.com/p/40863193f45780ab952cf68e92610c60">${icon('external')} Edit goals in Notion</a>`,false)}${planSummaryCard()}<div class="trend-cards"><section class="card"><div class="eyebrow">YOUR GOALS</div><div class="trend-number">${goals.length}</div><div class="trend-kicker">Total milestones</div></section><section class="card"><div class="eyebrow">IN PROGRESS</div><div class="trend-number">${active}</div><div class="trend-kicker">Currently active</div></section><section class="card"><div class="eyebrow">ACHIEVED</div><div class="trend-number">${goals.filter(x=>x.Status==='Achieved').length}</div><div class="trend-kicker">Every win counts</div></section></div><div class="section-title"><h2>Your goals</h2><span class="pill">SYNCS WITH NOTION</span></div><div class="metric-grid">${goals.map((g,i)=>`<article class="goal-card"><div class="goal-top"><span class="goal-icon">${icon(['target','bolt','nutrition','water','activity'][i%5])}</span><span class="pill ${g.Status==='Achieved'?'':'ghost'}">${esc(g.Status||'Active')}</span></div><div class="goal-category" style="margin-top:13px">${esc(g.Category||'Personal')}</div><h3>${esc(g.Goal||'Goal')}</h3><p>${esc(g.Target||'Your next milestone.')}</p><label class="form-label" for="goal-${esc(g.id)}">Status</label><select class="select" id="goal-${esc(g.id)}" data-goal-status="${esc(g.id)}">${['Active','Planned','Achieved','Paused'].map(s=>`<option ${g.Status===s?'selected':''}>${s}</option>`).join('')}</select></article>`).join('')}</div>`;}
 function analytics(){const ds=S.data.daily||[],days=ds.filter(x=>x.Date&&num(x.Calories)>0),average=days.length?days.reduce((n,x)=>n+num(x.Calories),0)/days.length:0;const prodays=days.filter(x=>num(x.Protein)>=tar(x,'Protein Target (g)','Protein (g)',PLAN.protein)).length;const watery=days.filter(x=>num(x['Water (ml)'])>=tar(x,'Water Target (ml)','Water (ml)',3000)).length;const taken=ds.filter(x=>x['Creatine Taken']).length;return `${pageHeading('Proof in the progress.','A clearer picture of your habits, nutrition and body trends.',`<button class="btn btn-outline" data-action="refresh">${icon('refresh')} Sync now</button>`,false)}<div class="trend-cards"><div class="card"><div class="eyebrow">AVG. DAILY CALORIES</div><div class="trend-number">${days.length?fmt(average):'—'} <small>kcal</small></div><div class="trend-kicker">Days with recorded intake: ${days.length}</div></div><div class="card"><div class="eyebrow">PROTEIN GOAL MET</div><div class="trend-number">${prodays} <small>days</small></div><div class="trend-kicker">Of ${days.length} logged food days</div></div><div class="card"><div class="eyebrow">WATER GOAL MET</div><div class="trend-number">${watery} <small>days</small></div><div class="trend-kicker">Creatine recorded: ${taken} days</div></div></div><div class="section-grid"><section class="card">${sectionTitle('Daily energy intake','CALORIES · KCAL')}${chartSvg(days,'Calories',{pad:100})}</section><section class="card">${sectionTitle('Protein over time','INTAKE · GRAMS')}${chartSvg(days,'Protein',{pad:20})}</section><section class="card">${sectionTitle('Your weight trend','BODY WEIGHT · KG')}${chartSvg(S.data.body||[],'Body Weight',{pad:1})}</section><section class="card">${sectionTitle('Water intake','HYDRATION · ML')}${chartSvg(days,'Water (ml)',{pad:200})}</section></div><div class="source-note page-wide"><strong>How we measure success:</strong> Daily targets are compared only with days that contain data. Missing days are not treated as missed goals. Device body-fat readings are estimates; use long-term weight, waist and strength trends together.</div>`;}
@@ -385,4 +522,4 @@ document.addEventListener('input',e=>{if(e.target.id==='exercise-search'){S.sear
 window.addEventListener('hashchange',()=>{const val=location.hash.slice(1)||'dashboard';if(S.route!==val&&routes[val]){S.route=val;S.search='';S.filter='All';render();}});
 $('#menu-toggle').addEventListener('click',()=>$('#sidebar').classList.toggle('mobile-open'));
 $('#refresh-button').addEventListener('click',()=>refresh().then(()=>toast('Dashboard refreshed')));
-S.route=routes[location.hash.slice(1)]?location.hash.slice(1):'dashboard';window.setInterval(updateGoalCountdown,1000);refresh();
+attachWeightChartInteraction();S.route=routes[location.hash.slice(1)]?location.hash.slice(1):'dashboard';window.setInterval(updateGoalCountdown,1000);refresh();

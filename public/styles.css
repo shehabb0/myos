@@ -144,3 +144,29 @@ html[data-theme="dark"] .inbody-preview-row p,html[data-theme="dark"] .inbody-at
 .inbody-extra{margin-top:4px;padding:12px 13px;border:1px solid var(--line);border-radius:11px}
 .inbody-extra summary{cursor:pointer;font-weight:700;font-size:12px;color:var(--ink)}
 .inbody-extra .form-row{margin-top:14px}
+
+/* Interactivity for the Body Weight trend only. */
+.chart-holder-interactive{position:relative;isolation:isolate}
+.weight-chart-point{cursor:crosshair;outline:none}
+.weight-chart-hit{pointer-events:all}
+.weight-chart-guide{stroke:#8dae80;stroke-width:1.4;stroke-dasharray:3 5;opacity:0;pointer-events:none;transition:opacity .15s}
+.weight-chart-halo{fill:#88b27c;fill-opacity:.16;stroke:#80a975;stroke-opacity:.6;stroke-width:1.3;opacity:0;pointer-events:none;transition:opacity .15s}
+.weight-chart-point.is-active .weight-chart-guide,.weight-chart-point.is-active .weight-chart-halo,.weight-chart-point:focus-visible .weight-chart-guide,.weight-chart-point:focus-visible .weight-chart-halo{opacity:1}
+.weight-chart-point.is-active .chart-dot,.weight-chart-point:focus-visible .chart-dot{fill:#91c37f;stroke:#426a41;stroke-width:3}
+.weight-chart-point:focus-visible .weight-chart-halo{stroke:#b0dd86;stroke-width:3}
+.weight-chart-tooltip{position:absolute;z-index:3;width:max-content;max-width:min(238px,calc(100% - 20px));min-width:174px;padding:12px 15px;border:1px solid #dce7d9;border-radius:13px;box-shadow:0 13px 38px #1d33252a;background:var(--white);color:var(--ink);pointer-events:none;transform:translate(-50%,calc(-100% - 13px));transition:opacity .12s}
+.weight-chart-tooltip[hidden],.weight-tooltip-change[hidden],.weight-tooltip-extra[hidden]{display:none!important}
+.weight-chart-tooltip[data-placement="below"]{transform:translate(-50%,13px)}
+.weight-tooltip-eyebrow{font-size:9px;font-weight:850;letter-spacing:1.25px;color:#849b7e}
+.weight-tooltip-value{font-size:25px;line-height:1.3;font-weight:850;letter-spacing:-.8px;margin:5px 0 1px;font-variant-numeric:tabular-nums}
+.weight-tooltip-date{font-size:11px;color:var(--muted)}
+.weight-tooltip-change{font-size:11px;font-weight:750;color:#51764f;margin-top:9px}
+.weight-tooltip-change[data-direction="up"]{color:#a8774d}
+.weight-tooltip-extra{border-top:1px solid var(--line);padding-top:8px;margin-top:9px;font-size:10px;line-height:1.6;color:var(--muted)}
+.weight-chart-help{font-size:10px;color:var(--muted);text-align:right;margin-top:3px}
+html[data-theme="dark"] .weight-chart-tooltip{border-color:#3d5a43;box-shadow:0 15px 40px #050c0866}
+html[data-theme="dark"] .weight-tooltip-eyebrow{color:#bad4a2}
+html[data-theme="dark"] .weight-chart-point.is-active .chart-dot{stroke:#c8f29f;fill:#53754b}
+html[data-theme="dark"] .weight-tooltip-change{color:#b4dfa5}
+html[data-theme="dark"] .weight-tooltip-change[data-direction="up"]{color:#f0bf8a}
+@media(max-width:540px){.weight-chart-tooltip{min-width:150px;padding:10px 12px}.weight-tooltip-value{font-size:22px}.weight-chart-help{text-align:center}}
