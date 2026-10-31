@@ -193,7 +193,7 @@ async function importInbodyPhoto(file){
  try{
   if(!window.MYOS_INBODY)throw new Error('Image reader is unavailable; refresh Myos and try again.');
   const result=await window.MYOS_INBODY.scan(file,msg=>{if(status.isConnected)status.textContent=msg;});
-  const fields=['date','weight','bodyFat','bodyFatMass','muscleMass','bodyWater','absFatMass'];
+  const fields=['date','weight','bodyFat','bodyFatMass','muscleMass','segmentalFat'];
   let found=0;
   for(const key of fields){
    const input=$('#weight-form [name="'+key+'"]');
@@ -202,7 +202,7 @@ async function importInbodyPhoto(file){
     found++;
    }
   }
-  status.textContent=found?'Read '+found+' fields. Check all numbers and the scan date against your photo before saving.':'No values were recognized. You can still enter the results manually.';
+  status.textContent=found?'Read '+found+' fields. Review them against your photo before saving.'+(result.values.segmentalFat==null?' The center Segmental Fat Analysis value could not be read; please enter its kg value manually.':''):'No values were recognized. You can still enter the results manually.';
  }catch(error){
   status.textContent='Automatic reading failed: '+error.message+' You can enter the results manually.';
  }finally{inbodyScanning=false;if(submit.isConnected)submit.disabled=false;}
@@ -233,8 +233,7 @@ async function logWeight(values,file,attachPhoto){
     'Body Fat Percentage (PBF)':values.bodyFat!=null?values.bodyFat/100:null,
     'Body Fat Mass':values.bodyFatMass??null,
     'Skeletal Muscle Mass (SMM)':values.muscleMass??null,
-    'Total Body Water (L)':values.bodyWater??null,
-    'Abs Fat Mass':values.absFatMass??null,
+    'Segmental Fat Analysis (Abs)':values.segmentalFat??null,
     Waist:values.waist??null,Arm:values.arm??null
    });
    saveDemo();
@@ -334,12 +333,11 @@ function weightModal(){
   +'<div class="inbody-upload"><label class="form-label" for="inbody-file">InBody report photo (optional)</label>'
   +'<input id="inbody-file" type="file" accept="image/jpeg,image/png,image/webp" class="form-control inbody-file-input" />'
   +'<div class="inbody-preview-row"><img id="inbody-preview" alt="Selected InBody report" hidden /><p id="inbody-status" role="status" aria-live="polite">Choose a photo to prefill your measurements.</p></div></div>'
-  +'<div class="source-note inbody-review-note">Only the fields in your current Notion Weight Tracker are used. Review the imported numbers before saving. The photo is read locally and can optionally be attached inside the weigh-in page in Notion. It will not add extra tracker columns.</div>'
+  +'<div class="source-note inbody-review-note">The Segmental Fat Analysis value is the center (trunk) number in kg, not the percentage below it. Review imported numbers before saving. You can still attach the original photo to the Notion weigh-in page.</div>'
   +'<div class="form-row"><div class="form-group"><label class="form-label" for="inbody-date">Scan date</label><input class="form-control" id="inbody-date" name="date" type="date" value="'+esc(S.date)+'" required></div>'
   +'<div class="form-group"><label class="form-label" for="inbody-weight">Body weight (kg) *</label><input class="form-control" id="inbody-weight" name="weight" type="number" step="0.1" min="25" max="250" placeholder="62.7" required></div></div>'
   +'<div class="form-row">'+field('bodyFat','Body fat percentage (PBF)',3,65)+field('bodyFatMass','Body fat mass (kg)',1,125)+'</div>'
-  +'<div class="form-row">'+field('muscleMass','Skeletal muscle mass (SMM)',5,85)+field('bodyWater','Total body water (L)',10,90)+'</div>'
-  +'<div class="form-row">'+field('absFatMass','Abs fat mass (kg)',0,50)+'</div>'
+  +'<div class="form-row">'+field('muscleMass','Skeletal muscle mass (SMM)',5,85)+field('segmentalFat','Segmental Fat Analysis – center (kg)',0,30)+'</div>'
   +'<details class="inbody-extra"><summary>Optional body measurements</summary><div class="form-row">'+field('waist','Waist (cm)',20,250)+field('arm','Arm (cm)',10,80)+'</div></details>'
   +'<label class="inbody-attach-option"><input type="checkbox" name="attachPhoto" '+(S.mode==='notion'?'checked':'disabled')+'> Attach original InBody photo to the Notion weigh-in page</label>'
   +(S.mode!=='notion'?'<p class="page-subtitle">Connect Notion to enable photo attachment.</p>':'')
@@ -374,7 +372,7 @@ document.addEventListener('click',async e=>{const button=e.target.closest('[data
 document.addEventListener('click',e=>{const sidebarLink=e.target.closest('a[data-route]');if(sidebarLink){e.preventDefault();changeRoute(sidebarLink.dataset.route);return;}const nav=e.target.closest('[data-route-jump]');if(nav){changeRoute(nav.dataset.routeJump);}});
 document.addEventListener('submit',async e=>{if(!['food-form','plan-form','weight-form','login-form','connect-form'].includes(e.target.id))return;e.preventDefault();const form=e.target;const fd=new FormData(form);if(form.id==='food-form')await logFood(fd.get('food'),Number(fd.get('grams')),fd.get('slot'));if(form.id==='plan-form')await addPlan(fd.get('meal'),fd.get('slot'));if(form.id==='weight-form'){
  const measure={date:String(fd.get('date')||''),weight:Number(fd.get('weight')),isInbody:!!inbodyFile};
- for(const key of ['waist','arm','bodyFat','bodyFatMass','muscleMass','bodyWater','absFatMass']){
+ for(const key of ['waist','arm','bodyFat','bodyFatMass','muscleMass','segmentalFat']){
   const raw=String(fd.get(key)||'').trim();
   if(raw!=='')measure[key]=Number(raw);
  }
