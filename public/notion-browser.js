@@ -197,7 +197,7 @@ async function route(url,options={}){
    bodyFat:['Body Fat Percentage (PBF)',3,65],
    bodyFatMass:['Body Fat Mass',1,125],
    muscleMass:['Skeletal Muscle Mass (SMM)',5,85],
-   segmentalFat:['Segmental Fat Analysis (Abs)',0,30]
+   segmentalFat:['Trunk Fat Mass',0,30]
   };
   for(const [key,[field,min,max]] of Object.entries(numeric)){
    if(b[key]===undefined||b[key]===null||b[key]==='')continue;

@@ -233,7 +233,7 @@ async function logWeight(values,file,attachPhoto){
     'Body Fat Percentage (PBF)':values.bodyFat!=null?values.bodyFat/100:null,
     'Body Fat Mass':values.bodyFatMass??null,
     'Skeletal Muscle Mass (SMM)':values.muscleMass??null,
-    'Segmental Fat Analysis (Abs)':values.segmentalFat??null,
+    'Trunk Fat Mass':values.segmentalFat??null,
     Waist:values.waist??null,Arm:values.arm??null
    });
    saveDemo();
@@ -337,7 +337,7 @@ function weightModal(){
   +'<div class="form-row"><div class="form-group"><label class="form-label" for="inbody-date">Scan date</label><input class="form-control" id="inbody-date" name="date" type="date" value="'+esc(S.date)+'" required></div>'
   +'<div class="form-group"><label class="form-label" for="inbody-weight">Body weight (kg) *</label><input class="form-control" id="inbody-weight" name="weight" type="number" step="0.1" min="25" max="250" placeholder="62.7" required></div></div>'
   +'<div class="form-row">'+field('bodyFat','Body fat percentage (PBF)',3,65)+field('bodyFatMass','Body fat mass (kg)',1,125)+'</div>'
-  +'<div class="form-row">'+field('muscleMass','Skeletal muscle mass (SMM)',5,85)+field('segmentalFat','Segmental Fat Analysis – center (kg)',0,30)+'</div>'
+  +'<div class="form-row">'+field('muscleMass','Skeletal muscle mass (SMM)',5,85)+field('segmentalFat','Trunk Fat Mass (kg)',0,30)+'</div>'
   +'<details class="inbody-extra"><summary>Optional body measurements</summary><div class="form-row">'+field('waist','Waist (cm)',20,250)+field('arm','Arm (cm)',10,80)+'</div></details>'
   +'<label class="inbody-attach-option"><input type="checkbox" name="attachPhoto" '+(S.mode==='notion'?'checked':'disabled')+'> Attach original InBody photo to the Notion weigh-in page</label>'
   +(S.mode!=='notion'?'<p class="page-subtitle">Connect Notion to enable photo attachment.</p>':'')
