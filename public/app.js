@@ -309,6 +309,8 @@ function chartSvg(items,field,options={}){
   value:isFat?(item['Body Fat Percentage (PBF)']??item.Fat)==null?null:num(item['Body Fat Percentage (PBF)']??item.Fat)*100:num(item[field]),
   bodyFat:item['Body Fat Percentage (PBF)']??item.Fat,
   weight:item['Body Weight'],
+  bodyFatMass:item['Body Fat Mass']??item['Fat (kg)'],
+  trunkFatMass:item['Trunk Fat Mass'],
   smm:item['Skeletal Muscle Mass (SMM)']??item['Muscle Mass (kg)']
  })).filter(v=>v.date&&v.value!=null&&Number.isFinite(v.value)&&v.value>0).sort((a,b)=>a.date.localeCompare(b.date)).slice(-12);
  if(!vals.length)return `<div class="chart-empty">${icon('chart',27)}${isFat?'No body-fat readings yet. Add an InBody measurement to see the trend.':'No weigh-ins yet. Add a measurement to start your trend.'}</div>`;
@@ -325,7 +327,9 @@ function chartSvg(items,field,options={}){
   const diff=i===0?null:Math.round((v.value-vals[i-1].value)*10)/10;
   const fat=v.bodyFat==null?'':fmt(num(v.bodyFat)*100,1);
   const muscle=v.smm==null?'':fmt(num(v.smm),1);
-  return `<g class="weight-chart-point" data-weight-point data-index="${i}" data-kind="${isFat?'fat':'weight'}" data-date="${esc(v.date)}" data-weight="${v.value}" data-actual-weight="${v.weight==null?'':fmt(v.weight,1)}" data-delta="${diff??''}" data-fat="${fat}" data-smm="${muscle}" data-x="${(x(i)/w*100).toFixed(4)}" data-y="${(y(v.value)/h*100).toFixed(4)}" tabindex="0" role="button" aria-label="${esc(dateLabel(v.date,{year:'numeric',month:'long',day:'numeric'}))}: ${fmt(v.value,1)} ${isFat?'percent body fat':'kilograms'}${diff==null?'':`, ${diff>0?'+':''}${fmt(diff,1)} ${isFat?'percentage points':'kilograms'} since previous measurement`}. Tap or press Enter for details.">
+  const fatMass=v.bodyFatMass==null?'':fmt(num(v.bodyFatMass),1);
+  const trunkFatMass=v.trunkFatMass==null?'':fmt(num(v.trunkFatMass),1);
+  return `<g class="weight-chart-point" data-weight-point data-index="${i}" data-kind="${isFat?'fat':'weight'}" data-date="${esc(v.date)}" data-weight="${v.value}" data-actual-weight="${v.weight==null?'':fmt(v.weight,1)}" data-delta="${diff??''}" data-fat="${fat}" data-smm="${muscle}" data-fat-mass="${fatMass}" data-trunk-fat-mass="${trunkFatMass}" data-x="${(x(i)/w*100).toFixed(4)}" data-y="${(y(v.value)/h*100).toFixed(4)}" tabindex="0" role="button" aria-label="${esc(dateLabel(v.date,{year:'numeric',month:'long',day:'numeric'}))}: ${fmt(v.value,1)} ${isFat?'percent body fat':'kilograms'}${diff==null?'':`, ${diff>0?'+':''}${fmt(diff,1)} ${isFat?'percentage points':'kilograms'} since previous measurement`}. Tap or press Enter for details.">
     <rect class="weight-chart-hit" x="${start}" y="${top-15}" width="${end-start}" height="${h-bottom-top+27}" fill="transparent" />
     <line class="weight-chart-guide" x1="${x(i)}" y1="${top}" x2="${x(i)}" y2="${h-bottom}" />
     <circle class="weight-chart-halo" cx="${x(i)}" cy="${y(v.value)}" r="10" />
@@ -370,9 +374,13 @@ function showWeightChartPoint(point){
   changeEl.dataset.direction=delta>0?'up':delta<0?'down':'flat';
  }
  const extras=[];
- if(isFat&&point.dataset.actualWeight!=='')extras.push(point.dataset.actualWeight+' kg weight');
- if(!isFat&&point.dataset.fat!=='')extras.push(point.dataset.fat+'% body fat');
- if(point.dataset.smm!=='')extras.push(point.dataset.smm+' kg skeletal muscle');
+ if(isFat){
+  extras.push('Body Fat Mass: '+(point.dataset.fatMass!==''?point.dataset.fatMass+' kg':'not recorded'));
+  extras.push('Trunk Fat Mass: '+(point.dataset.trunkFatMass!==''?point.dataset.trunkFatMass+' kg':'not recorded'));
+ }else{
+  if(point.dataset.fat!=='')extras.push(point.dataset.fat+'% body fat');
+  if(point.dataset.smm!=='')extras.push(point.dataset.smm+' kg skeletal muscle');
+ }
  const extraEl=tooltip.querySelector('.weight-tooltip-extra');
  extraEl.hidden=extras.length===0;
  extraEl.textContent=extras.join(' · ');
