@@ -200,9 +200,11 @@ async function importInbodyPhoto(file){
    if(input&&result.values[key]!==undefined&&result.values[key]!==null){
     input.value=String(result.values[key]);
     found++;
+   }else if(input&&key!=='date'){
+    input.value=''; // Never retain a value read from another photo.
    }
   }
-  status.textContent=found?'Read '+found+' fields. Verify them against the photo before saving.'+(result.values.weight==null?' Body Weight could not be read; please enter the weight in kg.':'')+(result.values.segmentalFat==null?' Trunk Fat Mass was not reliably recognized in kg; please enter the central kg value manually (not the %).':''):'No reliable values were recognized. Enter the measurements manually and check your scan.';
+  status.textContent=found?'Read '+found+' fields. Verify them against the photo before saving.'+(result.values.weight==null?' Body Weight could not be read; please enter the weight in kg.':'')+(result.values.muscleMass==null?' Skeletal Muscle Mass was not reliably recognized; enter the SMM kg value manually.':'')+(result.values.segmentalFat==null?' Trunk Fat Mass was not reliably recognized in kg; please enter the central kg value manually (not the %).':''):'No reliable values were recognized. Enter the measurements manually and check your scan.';
  }catch(error){
   status.textContent='Automatic reading failed: '+error.message+' You can enter the results manually.';
  }finally{inbodyScanning=false;if(submit.isConnected)submit.disabled=false;}
@@ -335,7 +337,7 @@ function weightModal(){
   +'<div class="inbody-preview-row"><img id="inbody-preview" alt="Selected InBody report" hidden /><p id="inbody-status" role="status" aria-live="polite">Choose a photo to prefill your measurements.</p></div></div>'
   +'<div class="source-note inbody-review-note">For Trunk Fat Mass, use the number in kg at the center of Segmental Fat Analysis, never the % underneath. Please verify all imported measurements before saving. You can still attach your original scan to the Notion weigh-in page.</div>'
   +'<div class="form-row"><div class="form-group"><label class="form-label" for="inbody-date">Scan date</label><input class="form-control" id="inbody-date" name="date" type="date" value="'+esc(S.date)+'" required></div>'
-  +'<div class="form-group"><label class="form-label" for="inbody-weight">Body weight (kg) *</label><input class="form-control" id="inbody-weight" name="weight" type="number" step="0.1" min="25" max="250" placeholder="62.7" required></div></div>'
+  +'<div class="form-group"><label class="form-label" for="inbody-weight">Body weight (kg) *</label><input class="form-control" id="inbody-weight" name="weight" type="number" step="0.1" min="25" max="250" placeholder="Enter weight" required></div></div>'
   +'<div class="form-row">'+field('bodyFat','Body fat percentage (PBF)',3,65)+field('bodyFatMass','Body fat mass (kg)',1,125)+'</div>'
   +'<div class="form-row">'+field('muscleMass','Skeletal muscle mass (SMM)',5,85)+field('segmentalFat','Trunk Fat Mass (kg)',0,30)+'</div>'
   +'<details class="inbody-extra"><summary>Optional body measurements</summary><div class="form-row">'+field('waist','Waist (cm)',20,250)+field('arm','Arm (cm)',10,80)+'</div></details>'
