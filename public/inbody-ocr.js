@@ -7,21 +7,16 @@
   return hit?Number(hit[0]):null;
  };
  const valid = (key,value) => {
-  const ranges={weight:[25,250],bodyFat:[3,65],bodyFatMass:[1,125],muscleMass:[5,85],bmi:[10,70],bmr:[500,3500],visceralFat:[1,40],bodyWater:[10,90],waistHipRatio:[.5,1.5],inbodyScore:[1,100],fatFreeMass:[10,180]};
+  const ranges={weight:[25,250],bodyFat:[3,65],bodyFatMass:[1,125],muscleMass:[5,85],bodyWater:[10,90],absFatMass:[0,50]};
   return Number.isFinite(value)&&value>=ranges[key][0]&&value<=ranges[key][1];
  };
  const rules=[
   ['bodyFatMass',/^\s*(?:for storing excess energy\s*)?(?:body\s*fat\s*mass|fat\s*mass)\s*(?:\(?kg\)?)?\s*[:\-]?\s*/i],
   ['muscleMass',/^\s*(?:smm|skeletal\s*muscle\s*mass)\s*(?:\(?kg\)?)?\s*[:\-]?\s*/i],
-  ['bodyFat',/^\s*(?:pbf|percent\s*body\s*fat|body\s*fat\s*\(%\)|percentage\s*body\s*fat)\s*(?:\(?%\)?)?\s*[:\-]?\s*/i],
+  ['bodyFat',/^\s*(?:pbf|percent\s*body\s*fat|body\s*fat\s*\(%\)|body\s*fat\s*percentage|percentage\s*body\s*fat)\s*(?:\(?%\)?)?\s*[:\-]?\s*/i],
   ['weight',/^\s*(?:sum\s*of\s*the\s*above\s*)?(?:body\s*)?weight\s*(?:\(?kg\)?)?\s*[:\-]?\s*/i],
-  ['bmi',/^\s*bmi\s*(?:\(?kg\s*\/\s*m2\)?)?\s*[:\-]?\s*/i],
-  ['bmr',/^\s*basal\s*metabolic\s*rate\s*(?:\(?kcal\)?)?\s*[:\-]?\s*/i],
-  ['visceralFat',/^\s*visceral\s*fat\s*level\s*[:\-]?\s*/i],
   ['bodyWater',/^\s*(?:total\s*body\s*water)\s*(?:\(?l\)?)?\s*[:\-]?\s*/i],
-  ['waistHipRatio',/^\s*waist[-\s]*hip\s*ratio\s*[:\-]?\s*/i],
-  ['inbodyScore',/^\s*inbody\s*score\s*[:\-]?\s*/i],
-  ['fatFreeMass',/^\s*fat[-\s]*free\s*mass\s*(?:\(?kg\)?)?\s*[:\-]?\s*/i]
+  ['absFatMass',/^\s*(?:abs(?:dominal)?\s*fat\s*mass|trunk\s*fat\s*mass)\s*(?:\(?kg\)?)?\s*[:\-]?\s*/i]
  ];
  function dateFrom(text){
   const lines=String(text||'').split(/\r?\n/).slice(0,28);

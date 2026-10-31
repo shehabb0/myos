@@ -139,3 +139,8 @@ html[data-theme="dark"] .inbody-upload{background:#1d3023;border-color:#476149}
 html[data-theme="dark"] .inbody-file-input::file-selector-button{background:#355238;border-color:#56745b;color:#e3f2db}
 html[data-theme="dark"] .inbody-preview-row p,html[data-theme="dark"] .inbody-attach-option{color:#c0d3bf}
 @media(max-width:560px){.modal:has(#weight-form){padding:20px}.inbody-preview-row img{width:65px}.modal:has(#weight-form) .form-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.modal:has(#weight-form) .form-label{font-size:10px}.modal:has(#weight-form) .form-control{font-size:12px}}
+
+/* Compact additional fields for the streamlined InBody form. */
+.inbody-extra{margin-top:4px;padding:12px 13px;border:1px solid var(--line);border-radius:11px}
+.inbody-extra summary{cursor:pointer;font-weight:700;font-size:12px;color:var(--ink)}
+.inbody-extra .form-row{margin-top:14px}
