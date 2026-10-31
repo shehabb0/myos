@@ -172,7 +172,71 @@ async function deletePlannedMeal(planId){
 }
 async function addPlan(mealId,slot){try{if(S.mode==='notion'){const r=await post('/api/plan',{date:S.date,mealId,slot});S.data.planner.push(r.entry);}else{S.data.planner.push({id:'demo-plan-'+Date.now(),Date:S.date,Meal:[mealId],Slot:slot,Status:'Planned',Servings:1});saveDemo();}closeModal();render();toast('Meal added to your plan');}catch(e){toast(e.message,true)}}
 async function changeGoalStatus(id,status){try{if(S.mode==='notion')await post('/api/goal/status',{id,status});S.data.goals.find(x=>x.id===id).Status=status;saveDemo();render();toast('Goal updated');}catch(e){toast(e.message,true)}}
-async function logWeight(weight,waist){try{if(S.mode==='notion'){const r=await post('/api/weight',{date:S.date,weight,waist});S.data.body.push(r.entry)}else{S.data.body.push({id:'demo-wt-'+Date.now(),Date:S.date,'Body Weight':weight,Waist:waist||null});saveDemo()}closeModal();render();toast('Measurement saved');}catch(e){toast(e.message,true)}}
+
+let inbodyFile=null;
+let inbodyPreviewUrl=null;
+let inbodyScanning=false;
+async function importInbodyPhoto(file){
+ const status=$('#inbody-status'),preview=$('#inbody-preview'),submit=$('#weight-form button[type="submit"]');
+ if(!status||!preview||!submit)return;
+ inbodyFile=file||null;
+ if(inbodyPreviewUrl){URL.revokeObjectURL(inbodyPreviewUrl);inbodyPreviewUrl=null;}
+ preview.hidden=true;preview.removeAttribute('src');
+ if(!file){status.textContent='Choose a photo to prefill your measurements, or enter them manually.';return;}
+ if(!/^image\/(?:jpeg|png|webp|bmp)$/i.test(file.type)||file.size>20*1024*1024){
+  status.textContent='Choose a JPG, PNG, or WebP image under 20 MB.';inbodyFile=null;return;
+ }
+ inbodyPreviewUrl=URL.createObjectURL(file);
+ preview.src=inbodyPreviewUrl;preview.hidden=false;
+ inbodyScanning=true;submit.disabled=true;
+ status.textContent='Loading photo reader…';
+ try{
+  if(!window.MYOS_INBODY)throw new Error('Image reader is unavailable; refresh Myos and try again.');
+  const result=await window.MYOS_INBODY.scan(file,msg=>{if(status.isConnected)status.textContent=msg;});
+  const fields=['date','weight','bodyFat','bodyFatMass','muscleMass','bmi','bmr','visceralFat','bodyWater','waistHipRatio','inbodyScore','fatFreeMass'];
+  let found=0;
+  for(const key of fields){
+   const input=$('#weight-form [name="'+key+'"]');
+   if(input&&result.values[key]!==undefined&&result.values[key]!==null){
+    input.value=String(result.values[key]);
+    found++;
+   }
+  }
+  status.textContent=found?'Read '+found+' fields. Check all numbers and the scan date against your photo before saving.':'No values were recognized. You can still enter them manually and save your photo.';
+ }catch(error){
+  status.textContent='Automatic reading failed: '+error.message+' You can enter the results manually.';
+ }finally{inbodyScanning=false;if(submit.isConnected)submit.disabled=false;}
+}
+async function logWeight(values,file,attachPhoto){
+ if(S.busy||inbodyScanning)return;
+ S.busy=true;
+ const submit=$('#weight-form button[type="submit"]');
+ if(submit)submit.disabled=true;
+ try{
+  if(S.mode==='notion'){
+   const check=await post('/api/weight/check',{date:values.date});
+   if(check.exists)throw new Error('A weigh-in is already saved on '+values.date+'. Open the Notion Weight Tracker to edit it rather than duplicate it.');
+   if(file&&attachPhoto){
+    try{
+     const photo=await window.MYOS_NOTION.uploadBodyPhoto(file);
+     values.photoUploadId=photo.id;
+     values.photoName=photo.name;
+    }catch(err){
+     const proceed=window.confirm('The measurements were read, but the original photo could not be attached to Notion:\n\n'+err.message+'\n\nSave the measurements without the photo?');
+     if(!proceed)return;
+    }
+   }
+   const result=await post('/api/weight',values);
+   S.data.body.push(result.entry);
+  }else{
+   S.data.body.push({id:'demo-wt-'+Date.now(),Date:values.date,'Body Weight':values.weight,Waist:values.waist??null,Fat:values.bodyFat!=null?values.bodyFat/100:null,'Fat (kg)':values.bodyFatMass??null,'Muscle Mass (kg)':values.muscleMass??null,BMI:values.bmi??null,'BMR (kcal)':values.bmr??null,'Visceral Fat Level':values.visceralFat??null,'Total Body Water (L)':values.bodyWater??null,'Waist-Hip Ratio':values.waistHipRatio??null,'InBody Score':values.inbodyScore??null});
+   saveDemo();
+  }
+  closeModal();render();toast('Weigh-in saved'+(values.photoUploadId?' with InBody photo':'')+'.');
+ }catch(error){toast(error.message,true);}
+ finally{S.busy=false;const button=$('#weight-form button[type="submit"]');if(button)button.disabled=false;}
+}
+
 function pageHeading(title,subtitle,action='',dateControl=true){return `<div class="page-heading"><div><div class="eyebrow">PERSONAL TRAINING STUDIO</div><h1>${title}</h1><p class="page-subtitle">${subtitle}</p></div><div class="heading-actions">${dateControl?dateSwitcher():''}${action}</div></div>`;}
 function dateSwitcher(){return `<div class="date-switcher"><button type="button" data-action="date-prev" aria-label="Previous day">‹</button><span>${esc(dateLabel(S.date,{weekday:'short',month:'short',day:'numeric',year:'numeric'}))}</span><button type="button" data-action="date-next" aria-label="Next day">›</button></div>`;}
 function sectionTitle(label,description='',link='',linkText='View all'){return `<div class="section-title"><div>${description?`<div class="section-overline">${description}</div>`:''}<h2>${label}</h2></div>${link?`<button class="text-link" data-route-jump="${link}">${linkText} →</button>`:''}</div>`;}
@@ -233,7 +297,7 @@ function exerciseCards(items){return items.length?items.map(x=>`<article class="
 function chartSvg(items,field,options={}){const vals=items.map(x=>({date:x.Date, value:num(x[field])})).filter(x=>x.value>0&&x.date).sort((a,b)=>a.date.localeCompare(b.date)).slice(-12);if(vals.length<2)return `<div class="chart-empty">${icon('chart',27)}Not enough entries to show a trend yet.</div>`;
  const min=Math.min(...vals.map(x=>x.value)),max=Math.max(...vals.map(x=>x.value)),pad=Math.max((max-min)*.3,options.pad||1),lo=Math.max(0,min-pad),hi=max+pad;const w=650,h=224,left=28,right=20,top=19,bottom=30,x=i=>left+(w-left-right)*i/(vals.length-1),y=v=>top+(h-top-bottom)*(1-(v-lo)/(hi-lo||1));const pts=vals.map((v,i)=>`${x(i)},${y(v.value)}`).join(' ');const area=`M${x(0)} ${h-bottom} L${vals.map((v,i)=>`${x(i)} ${y(v.value)}`).join(' L')} L${x(vals.length-1)} ${h-bottom} Z`;
  return `<div class="chart-holder"><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="${esc(field)} trend"><defs><linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#a7c9a2" stop-opacity=".35"/><stop offset="100%" stop-color="#a7c9a2" stop-opacity="0"/></linearGradient></defs>${Array.from({length:4},(_,i)=>{const gy=top+i*(h-top-bottom)/3;const vv=hi-i*(hi-lo)/3;return `<line class="chart-gridline" x1="${left}" y1="${gy}" x2="${w-right}" y2="${gy}"/><text x="0" y="${gy+4}" class="chart-label">${fmt(vv,1)}</text>`}).join('')}<path d="${area}" class="chart-area"/><polyline points="${pts}" class="chart-line"/>${vals.map((v,i)=>`<circle class="chart-dot" cx="${x(i)}" cy="${y(v.value)}" r="4"/>`).join('')}${vals.filter((v,i)=>i===0||i===vals.length-1||i===Math.floor((vals.length-1)/2)).map(v=>{const i=vals.indexOf(v);return `<text x="${x(i)}" y="${h-6}" class="chart-label" text-anchor="middle">${dateLabel(v.date,{month:'short',day:'numeric'})}</text>`}).join('')}</svg></div>`;}
-function body(){const items=[...(S.data.body||[])].filter(x=>x.Date).sort((a,b)=>a.Date.localeCompare(b.Date)),last=items.at(-1),prev=items.at(-2),delta=last&&prev?num(last['Body Weight'])-num(prev['Body Weight']):0;return `${pageHeading('More than a number.','Track trends, not single weigh-ins. All measurements stay personal.',`<button class="btn btn-accent" data-action="open-weight">${icon('plus')} Add weigh-in</button>`)}<div class="trend-cards"><section class="card"><div class="eyebrow">LATEST WEIGHT</div><div class="trend-number">${last?fmt(last['Body Weight'],1):'—'} <small>kg</small></div><div class="trend-kicker">${last?dateLabel(last.Date):'No readings yet'}</div></section><section class="card"><div class="eyebrow">CHANGE SINCE PREVIOUS</div><div class="trend-number">${last&&prev?(delta>0?'+':'')+fmt(delta,1):'—'} <small>kg</small></div><div class="trend-kicker">Changes can reflect hydration and timing.</div></section><section class="card"><div class="eyebrow">MEASUREMENTS</div><div class="trend-number">${items.length}</div><div class="trend-kicker">Recorded check-ins</div></section></div><section class="card">${sectionTitle('Body weight over time','YOUR LONG-TERM TREND')}${chartSvg(items,'Body Weight',{pad:1})}<div class="source-note">A consistent morning weigh-in routine is more informative than any one day's number. Device body-fat percentages are estimates and can fluctuate.</div></section><section class="card page-wide">${sectionTitle('Measurement history','WHAT YOU HAVE RECORDED')}<div class="meal-list">${items.length?items.slice().reverse().map(x=>`<div class="meal-row"><div class="meal-circle">⚖️</div><div class="meal-name"><b>${dateLabel(x.Date,{year:'numeric',month:'short',day:'numeric'})}</b><small>${x.Waist?fmt(x.Waist,1)+' cm waist · ':''}${x.Fat?fmt(x.Fat*100,1)+'% device-estimated body fat':''}</small></div><div class="meal-kcal">${fmt(x['Body Weight'],1)} <small>kg</small></div></div>`).join(''):emptyState('No measurements yet','Add your first weigh-in to see progress.')}</div></section>`;}
+function body(){const items=[...(S.data.body||[])].filter(x=>x.Date).sort((a,b)=>a.Date.localeCompare(b.Date)),last=items.at(-1),prev=items.at(-2),delta=last&&prev?num(last['Body Weight'])-num(prev['Body Weight']):0;return `${pageHeading('More than a number.','Track trends, not single weigh-ins. All measurements stay personal.',`<button class="btn btn-accent" data-action="open-weight">${icon('plus')} Add weigh-in</button>`)}<div class="trend-cards"><section class="card"><div class="eyebrow">LATEST WEIGHT</div><div class="trend-number">${last?fmt(last['Body Weight'],1):'—'} <small>kg</small></div><div class="trend-kicker">${last?dateLabel(last.Date):'No readings yet'}</div></section><section class="card"><div class="eyebrow">CHANGE SINCE PREVIOUS</div><div class="trend-number">${last&&prev?(delta>0?'+':'')+fmt(delta,1):'—'} <small>kg</small></div><div class="trend-kicker">Changes can reflect hydration and timing.</div></section><section class="card"><div class="eyebrow">MEASUREMENTS</div><div class="trend-number">${items.length}</div><div class="trend-kicker">Recorded check-ins</div></section></div><section class="card">${sectionTitle('Body weight over time','YOUR LONG-TERM TREND')}${chartSvg(items,'Body Weight',{pad:1})}<div class="source-note">A consistent morning weigh-in routine is more informative than any one day's number. Device body-fat percentages are estimates and can fluctuate.</div></section><section class="card page-wide">${sectionTitle('Measurement history','WHAT YOU HAVE RECORDED')}<div class="meal-list">${items.length?items.slice().reverse().map(x=>`<div class="meal-row"><div class="meal-circle">⚖️</div><div class="meal-name"><b>${dateLabel(x.Date,{year:'numeric',month:'short',day:'numeric'})}</b><small>${x.Waist?fmt(x.Waist,1)+' cm waist · ':''}${x.Fat!=null?fmt(x.Fat*100,1)+'% estimated body fat · ':''}${x['Fat (kg)']!=null?fmt(x['Fat (kg)'],1)+' kg fat mass · ':''}${x['Muscle Mass (kg)']!=null?fmt(x['Muscle Mass (kg)'],1)+' kg skeletal muscle':''}</small></div><div class="meal-kcal">${fmt(x['Body Weight'],1)} <small>kg</small></div></div>`).join(''):emptyState('No measurements yet','Add your first weigh-in to see progress.')}</div></section>`;}
 function goals(){const goals=S.data.goals||[],active=goals.filter(g=>g.Status==='Active').length;return `${pageHeading('Keep your eyes on it.','Big results begin with a few meaningful goals.',`<a class="btn btn-outline" target="_blank" rel="noopener noreferrer" href="https://app.notion.com/p/40863193f45780ab952cf68e92610c60">${icon('external')} Edit goals in Notion</a>`,false)}${planSummaryCard()}<div class="trend-cards"><section class="card"><div class="eyebrow">YOUR GOALS</div><div class="trend-number">${goals.length}</div><div class="trend-kicker">Total milestones</div></section><section class="card"><div class="eyebrow">IN PROGRESS</div><div class="trend-number">${active}</div><div class="trend-kicker">Currently active</div></section><section class="card"><div class="eyebrow">ACHIEVED</div><div class="trend-number">${goals.filter(x=>x.Status==='Achieved').length}</div><div class="trend-kicker">Every win counts</div></section></div><div class="section-title"><h2>Your goals</h2><span class="pill">SYNCS WITH NOTION</span></div><div class="metric-grid">${goals.map((g,i)=>`<article class="goal-card"><div class="goal-top"><span class="goal-icon">${icon(['target','bolt','nutrition','water','activity'][i%5])}</span><span class="pill ${g.Status==='Achieved'?'':'ghost'}">${esc(g.Status||'Active')}</span></div><div class="goal-category" style="margin-top:13px">${esc(g.Category||'Personal')}</div><h3>${esc(g.Goal||'Goal')}</h3><p>${esc(g.Target||'Your next milestone.')}</p><label class="form-label" for="goal-${esc(g.id)}">Status</label><select class="select" id="goal-${esc(g.id)}" data-goal-status="${esc(g.id)}">${['Active','Planned','Achieved','Paused'].map(s=>`<option ${g.Status===s?'selected':''}>${s}</option>`).join('')}</select></article>`).join('')}</div>`;}
 function analytics(){const ds=S.data.daily||[],days=ds.filter(x=>x.Date&&num(x.Calories)>0),average=days.length?days.reduce((n,x)=>n+num(x.Calories),0)/days.length:0;const prodays=days.filter(x=>num(x.Protein)>=tar(x,'Protein Target (g)','Protein (g)',PLAN.protein)).length;const watery=days.filter(x=>num(x['Water (ml)'])>=tar(x,'Water Target (ml)','Water (ml)',3000)).length;const taken=ds.filter(x=>x['Creatine Taken']).length;return `${pageHeading('Proof in the progress.','A clearer picture of your habits, nutrition and body trends.',`<button class="btn btn-outline" data-action="refresh">${icon('refresh')} Sync now</button>`,false)}<div class="trend-cards"><div class="card"><div class="eyebrow">AVG. DAILY CALORIES</div><div class="trend-number">${days.length?fmt(average):'—'} <small>kcal</small></div><div class="trend-kicker">Days with recorded intake: ${days.length}</div></div><div class="card"><div class="eyebrow">PROTEIN GOAL MET</div><div class="trend-number">${prodays} <small>days</small></div><div class="trend-kicker">Of ${days.length} logged food days</div></div><div class="card"><div class="eyebrow">WATER GOAL MET</div><div class="trend-number">${watery} <small>days</small></div><div class="trend-kicker">Creatine recorded: ${taken} days</div></div></div><div class="section-grid"><section class="card">${sectionTitle('Daily energy intake','CALORIES · KCAL')}${chartSvg(days,'Calories',{pad:100})}</section><section class="card">${sectionTitle('Protein over time','INTAKE · GRAMS')}${chartSvg(days,'Protein',{pad:20})}</section><section class="card">${sectionTitle('Your weight trend','BODY WEIGHT · KG')}${chartSvg(S.data.body||[],'Body Weight',{pad:1})}</section><section class="card">${sectionTitle('Water intake','HYDRATION · ML')}${chartSvg(days,'Water (ml)',{pad:200})}</section></div><div class="source-note page-wide"><strong>How we measure success:</strong> Daily targets are compared only with days that contain data. Missing days are not treated as missed goals. Device body-fat readings are estimates; use long-term weight, waist and strength trends together.</div>`;}
 function settings(){
@@ -243,7 +307,7 @@ function settings(){
 }
 function emptyState(head,desc){return `<div class="empty-state"><b>${esc(head)}</b>${esc(desc)}</div>`;}
 function modal(html){$('#modal-root').innerHTML=`<div class="modal-backdrop"><div class="modal" role="dialog" aria-modal="true" aria-label="Form dialog">${html}</div></div>`;$('#modal-root .modal-backdrop').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal()});$('#modal-root input, #modal-root select')?.focus();}
-function closeModal(){$('#modal-root').innerHTML='';}
+function closeModal(){$('#modal-root').innerHTML='';if(inbodyPreviewUrl){URL.revokeObjectURL(inbodyPreviewUrl);inbodyPreviewUrl=null;}inbodyFile=null;}
 function modalHeading(head,sub=''){return `<div class="modal-header"><div><h2>${head}</h2><p>${sub}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">${icon('close')}</button></div>`;}
 function connectModal(){
  const current=window.MYOS_NOTION.sources();
@@ -253,7 +317,31 @@ function connectModal(){
 }
 function foodModal(preferred=''){const foods=S.data.foods||[];if(!foods.length)return toast('Add foods to your Notion Food Database first',true);modal(`${modalHeading('Log your food','Adds the serving to today’s calories and food diary.')}<form id="food-form"><div class="form-group"><label class="form-label">Food</label><select class="select" name="food" required>${foods.map(f=>`<option value="${esc(f.id)}" ${f.id===preferred?'selected':''}>${esc(f['Food Name']||'Food')}</option>`).join('')}</select></div><div class="form-row"><div class="form-group"><label class="form-label">Quantity (grams)</label><input class="form-control" name="grams" inputmode="decimal" type="number" min="1" max="5000" step="1" value="100" required></div><div class="form-group"><label class="form-label">Meal</label><select class="select" name="slot">${['Breakfast','Lunch','Dinner','Snack'].map(x=>`<option>${x}</option>`).join('')}</select></div></div><div class="source-note"><strong>Note:</strong> This logs directly to your Daily Nutrients totals, independent of Notion's existing Intake buttons. Do not log the same food again in Notion.</div><div class="form-actions"><button type="button" class="btn btn-outline" data-action="close-modal">Cancel</button><button type="submit" class="btn btn-accent">${icon('plus')} Add food</button></div></form>`);}
 function planModal(){const meals=S.data.meals||[];if(!meals.length)return toast('Add meals to your Notion Meal Database first',true);modal(`${modalHeading('Plan a meal',`For ${dateLabel(S.date)}`)}<form id="plan-form"><div class="form-group"><label class="form-label">Saved meal</label><select class="select" name="meal">${meals.map(x=>`<option value="${esc(x.id)}">${esc(x['Meal Name']||'Meal')}</option>`).join('')}</select></div><div class="form-group"><label class="form-label">Time of day</label><select class="select" name="slot">${['Breakfast','Lunch','Dinner','Snack'].map(x=>`<option>${x}</option>`).join('')}</select></div><div class="source-note">Planning a meal does not add calories to your daily totals. Only foods actually logged count as consumed.</div><div class="form-actions"><button type="button" data-action="close-modal" class="btn btn-outline">Cancel</button><button type="submit" class="btn btn-accent">${icon('calendar')} Add to plan</button></div></form>`);}
-function weightModal(){modal(`${modalHeading('Add a weigh-in','Keep measurements consistent for better trends.')}<form id="weight-form"><div class="form-row"><div class="form-group"><label class="form-label">Body weight (kg)</label><input class="form-control" name="weight" type="number" step="0.1" min="25" max="400" placeholder="e.g. 65.2" required></div><div class="form-group"><label class="form-label">Waist (cm, optional)</label><input class="form-control" name="waist" type="number" min="20" max="250" step="0.1" placeholder="e.g. 76"></div></div><div class="form-actions"><button type="button" data-action="close-modal" class="btn btn-outline">Cancel</button><button type="submit" class="btn btn-accent">${icon('check')} Save measurement</button></div></form>`);}
+function weightModal(){
+ closeModal();
+ inbodyFile=null;inbodyScanning=false;
+ const field=(name,label,min,max,step='0.1',placeholder='')=>'<div class="form-group"><label class="form-label" for="inbody-'+name+'">'+label+'</label><input class="form-control" id="inbody-'+name+'" name="'+name+'" type="number" min="'+min+'" max="'+max+'" step="'+step+'" placeholder="'+placeholder+'"></div>';
+ modal(
+  modalHeading('Add a weigh-in','Upload an InBody scan to prefill the form, or enter measurements manually.')
+  +'<form id="weight-form">'
+  +'<div class="inbody-upload"><label class="form-label" for="inbody-file">InBody report photo (optional)</label>'
+  +'<input id="inbody-file" type="file" accept="image/jpeg,image/png,image/webp" class="form-control inbody-file-input" />'
+  +'<div class="inbody-preview-row"><img id="inbody-preview" alt="Selected InBody report" hidden /><p id="inbody-status" role="status" aria-live="polite">Choose a JPG, PNG, or WebP scan to read its results automatically.</p></div></div>'
+  +'<div class="source-note inbody-review-note">Please compare every imported value with the photo. OCR can confuse body-fat percentage with fat mass in kilograms. Nothing is saved until you confirm.</div>'
+  +'<div class="form-row"><div class="form-group"><label class="form-label" for="inbody-date">Scan date</label><input class="form-control" id="inbody-date" name="date" type="date" value="'+esc(S.date)+'" required></div>'
+  +'<div class="form-group"><label class="form-label" for="inbody-weight">Weight (kg) *</label><input class="form-control" id="inbody-weight" name="weight" type="number" step="0.1" min="25" max="250" placeholder="e.g. 62.7" required></div></div>'
+  +'<div class="form-row">'+field('bodyFat','Body fat (%)',3,65)+field('bodyFatMass','Body fat mass (kg)',1,125)+'</div>'
+  +'<div class="form-row">'+field('muscleMass','Skeletal muscle mass (kg)',5,85)+field('bmi','BMI',10,70)+'</div>'
+  +'<div class="form-row">'+field('bmr','Basal metabolic rate (kcal)',500,3500,1)+field('visceralFat','Visceral fat level',1,40,1)+'</div>'
+  +'<div class="form-row">'+field('bodyWater','Total body water (L)',10,90)+field('waistHipRatio','Waist-hip ratio',0.5,1.5,'0.01')+'</div>'
+  +'<div class="form-row">'+field('inbodyScore','InBody score',1,100,1)+field('fatFreeMass','Fat-free mass (kg)',10,180)+'</div>'
+  +'<div class="form-row">'+field('waist','Waist (cm, optional)',20,250)+'</div>'
+  +'<label class="inbody-attach-option"><input name="attachPhoto" type="checkbox" checked> Attach original photo to the Notion Weight Tracker (when connected)</label>'
+  +'<div class="form-actions"><button type="button" data-action="close-modal" class="btn btn-outline">Cancel</button><button type="submit" class="btn btn-accent">'+icon('check')+' Save weigh-in</button></div>'
+  +'</form>'
+ );
+}
+
 function lockView(){return `<div class="privacy-lock"><section class="card lock-card"><div class="lock-icon">${icon('lock',25)}</div><h1>Your studio is private.</h1><p>Enter the password you configured on the server to unlock your personal Notion data.</p><form id="login-form"><input type="password" class="form-control" placeholder="Studio password" name="password" autocomplete="current-password" required/><button class="btn btn-accent" type="submit">Unlock your studio ${icon('arrow')}</button></form></section></div>`;}
 function activeTheme(){return document.documentElement.dataset.theme==='dark'?'dark':'light';}
 function syncThemeButtons(){const dark=activeTheme()==='dark';$$('[data-action="theme-toggle"]').forEach(button=>{button.setAttribute('aria-label',dark?'Enable light mode':'Enable dark mode');button.title=dark?'Switch to light mode':'Switch to dark mode';if(button.id==='theme-toggle'){button.innerHTML=icon(dark?'sun':'moon',18)}else{button.innerHTML=icon(dark?'sun':'moon',16)+(dark?' Light mode':' Dark mode')}});}
@@ -278,8 +366,15 @@ document.addEventListener('click',async e=>{const button=e.target.closest('[data
  if(a==='logout'){window.MYOS_NOTION.disconnect();S.connectionError='';await refresh();toast('Disconnected. Showing demo data.');return;}
 });
 document.addEventListener('click',e=>{const sidebarLink=e.target.closest('a[data-route]');if(sidebarLink){e.preventDefault();changeRoute(sidebarLink.dataset.route);return;}const nav=e.target.closest('[data-route-jump]');if(nav){changeRoute(nav.dataset.routeJump);}});
-document.addEventListener('submit',async e=>{if(!['food-form','plan-form','weight-form','login-form','connect-form'].includes(e.target.id))return;e.preventDefault();const form=e.target;const fd=new FormData(form);if(form.id==='food-form')await logFood(fd.get('food'),Number(fd.get('grams')),fd.get('slot'));if(form.id==='plan-form')await addPlan(fd.get('meal'),fd.get('slot'));if(form.id==='weight-form')await logWeight(Number(fd.get('weight')),fd.get('waist')?Number(fd.get('waist')):undefined);if(form.id==='connect-form'){try{const mapping={};for(const k of Object.keys(window.MYOS_NOTION.labels)){const v=String(fd.get('source-'+k)||'').trim();if(v)mapping[k]=v;}await window.MYOS_NOTION.connect(fd.get('token'),mapping,fd.get('remember')==='on');closeModal();await refresh();if(S.mode==='notion')toast('Connected to Notion');}catch(err){toast(err.message,true);}}});
-document.addEventListener('change',async e=>{const el=e.target;if(el.matches('[data-goal-status]'))await changeGoalStatus(el.dataset.goalStatus,el.value);});
+document.addEventListener('submit',async e=>{if(!['food-form','plan-form','weight-form','login-form','connect-form'].includes(e.target.id))return;e.preventDefault();const form=e.target;const fd=new FormData(form);if(form.id==='food-form')await logFood(fd.get('food'),Number(fd.get('grams')),fd.get('slot'));if(form.id==='plan-form')await addPlan(fd.get('meal'),fd.get('slot'));if(form.id==='weight-form'){
+ const measure={date:String(fd.get('date')||''),weight:Number(fd.get('weight')),isInbody:!!inbodyFile};
+ for(const key of ['waist','bodyFat','bodyFatMass','muscleMass','bmi','bmr','visceralFat','bodyWater','waistHipRatio','inbodyScore','fatFreeMass']){
+  const raw=String(fd.get(key)||'').trim();
+  if(raw!=='')measure[key]=Number(raw);
+ }
+ await logWeight(measure,inbodyFile,fd.get('attachPhoto')==='on');
+}if(form.id==='connect-form'){try{const mapping={};for(const k of Object.keys(window.MYOS_NOTION.labels)){const v=String(fd.get('source-'+k)||'').trim();if(v)mapping[k]=v;}await window.MYOS_NOTION.connect(fd.get('token'),mapping,fd.get('remember')==='on');closeModal();await refresh();if(S.mode==='notion')toast('Connected to Notion');}catch(err){toast(err.message,true);}}});
+document.addEventListener('change',async e=>{const el=e.target;if(el.id==='inbody-file'){await importInbodyPhoto(el.files?.[0]);return;}if(el.matches('[data-goal-status]'))await changeGoalStatus(el.dataset.goalStatus,el.value);});
 document.addEventListener('input',e=>{if(e.target.id==='exercise-search'){S.search=e.target.value;const matched=(S.data.exercises||[]).filter(x=>(S.filter==='All'||x.PPL===S.filter)&&((x.Name||'').toLowerCase().includes(S.search.toLowerCase())||(x['Main Focus']||'').toLowerCase().includes(S.search.toLowerCase())));$('#exercise-grid').innerHTML=exerciseCards(matched);}if(e.target.id==='food-search-inline'){S.search=e.target.value;$('#food-library-list').innerHTML=foodLibraryList();}});
 window.addEventListener('hashchange',()=>{const val=location.hash.slice(1)||'dashboard';if(S.route!==val&&routes[val]){S.route=val;S.search='';S.filter='All';render();}});
 $('#menu-toggle').addEventListener('click',()=>$('#sidebar').classList.toggle('mobile-open'));

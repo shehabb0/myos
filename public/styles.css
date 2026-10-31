@@ -123,3 +123,19 @@ html[data-theme="dark"] .plan-delete-btn:hover,html[data-theme="dark"] .plan-del
 .hero-countdown .hero-chip{flex-shrink:0}
 @media(max-width:1020px){.hero-countdown{align-items:flex-start;flex-direction:column}.hero-countdown .hero-chip{align-self:flex-start;margin-top:5px}}
 @media(max-width:520px){.hero-countdown{padding:21px 19px}.goal-countdown-units{gap:6px}.goal-countdown-unit{min-width:58px;padding:9px 8px}.goal-countdown-unit strong{font-size:24px}.goal-countdown-unit span{font-size:8px;letter-spacing:.7px}}
+
+/* InBody scan import & review inside the existing weigh-in dialog. */
+.modal:has(#weight-form){width:min(690px,100%);max-height:min(92vh,900px);overflow:auto}
+.inbody-upload{margin-bottom:14px;padding:14px;border:1px dashed #afc5a8;background:#f7faf4;border-radius:13px}
+.inbody-file-input{height:auto;padding:10px;font-size:12px;cursor:pointer}
+.inbody-file-input::file-selector-button{margin-right:9px;border:1px solid #b8cbb5;border-radius:7px;padding:6px 10px;background:#e8f1df;color:#28442e;font-weight:700;cursor:pointer}
+.inbody-preview-row{display:flex;align-items:start;gap:12px;margin-top:9px}
+.inbody-preview-row img{width:86px;max-height:120px;object-fit:contain;border-radius:6px;flex:none;border:1px solid #dce8d9}
+.inbody-preview-row p{font-size:11px;line-height:1.6;color:#647968;margin:3px 0;min-width:0}
+.inbody-review-note{margin-bottom:17px;font-size:11px}
+.inbody-attach-option{display:flex;align-items:center;gap:8px;font-size:11px;line-height:1.55;cursor:pointer;color:#4a604e}
+.inbody-attach-option input{accent-color:#739e66;width:15px;height:15px;flex:none}
+html[data-theme="dark"] .inbody-upload{background:#1d3023;border-color:#476149}
+html[data-theme="dark"] .inbody-file-input::file-selector-button{background:#355238;border-color:#56745b;color:#e3f2db}
+html[data-theme="dark"] .inbody-preview-row p,html[data-theme="dark"] .inbody-attach-option{color:#c0d3bf}
+@media(max-width:560px){.modal:has(#weight-form){padding:20px}.inbody-preview-row img{width:65px}.modal:has(#weight-form) .form-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.modal:has(#weight-form) .form-label{font-size:10px}.modal:has(#weight-form) .form-control{font-size:12px}}

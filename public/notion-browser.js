@@ -182,13 +182,51 @@ async function route(url,options={}){
   if(!['Active','Planned','Achieved','Paused'].includes(b.status))throw new Error('Invalid goal status');
   await notion('PATCH',`/pages/${uuid(b.id)}`,{properties:{Status:prop('select',b.status)}});return {ok:true};
  }
+ if(url==='/api/weight/check'){
+  if(!dateValid(b.date))throw new Error('Choose a valid scan date.');
+  const existing=(await query('body',300)).find(x=>x.Date===b.date);
+  return {ok:true,exists:!!existing,url:existing?.url||null};
+ }
  if(url==='/api/weight'){
-  if(!dateValid(b.date)||Number(b.weight)<25||Number(b.weight)>400)throw new Error('Invalid date or weight');
-  const properties={Entry:prop('title','Body Log'),Date:prop('date',b.date),'Body Weight':prop('number',Number(b.weight))};
-  if(b.waist!==undefined&&b.waist!=='')properties.Waist=prop('number',Number(b.waist));
+  if(!dateValid(b.date)||!Number.isFinite(Number(b.weight))||Number(b.weight)<25||Number(b.weight)>250)throw new Error('Choose a valid date and body weight.');
+  const existing=(await query('body',300)).find(x=>x.Date===b.date);
+  if(existing)throw new Error('A weigh-in already exists for '+b.date+'. Open your Weight Tracker in Notion to edit it instead of creating a duplicate.');
+  const properties={Entry:prop('title',b.isInbody?'InBody Scan':'Body Log'),Date:prop('date',b.date),'Body Weight':prop('number',Number(b.weight))};
+  const numeric={
+   waist:['Waist',20,250],bodyFat:['Fat',3,65],bodyFatMass:['Fat (kg)',1,125],muscleMass:['Muscle Mass (kg)',5,85],
+   bmi:['BMI',10,70],bmr:['BMR (kcal)',500,3500],visceralFat:['Visceral Fat Level',1,40],
+   bodyWater:['Total Body Water (L)',10,90],waistHipRatio:['Waist-Hip Ratio',0.5,1.5],
+   inbodyScore:['InBody Score',1,100],fatFreeMass:['Fat-Free Mass (kg)',10,180]
+  };
+  for(const [key,[field,min,max]] of Object.entries(numeric)){
+   if(b[key]===undefined||b[key]===null||b[key]==='')continue;
+   const value=Number(b[key]);
+   if(!Number.isFinite(value)||value<min||value>max)throw new Error('Please check the '+field+' value.');
+   properties[field]=prop('number',key==='bodyFat'?value/100:value);
+  }
+  if(b.photoUploadId){
+   if(!/^[0-9a-f-]{32,36}$/i.test(String(b.photoUploadId)))throw new Error('Invalid photo upload ID');
+   properties['Progress Photo(s)']={files:[{name:String(b.photoName||'inbody-scan.jpg').slice(0,100),type:'file_upload',file_upload:{id:b.photoUploadId}}]};
+  }
   return {ok:true,entry:normalize(await notion('POST','/pages',{parent:{type:'data_source_id',data_source_id:uuid(sources.body)},properties}))};
  }
  throw new Error('Unknown request');
 }
-window.MYOS_NOTION={route,connect,disconnect,configured,connected:()=>!!token,sources:()=>({...sources}),labels:titles};
+
+async function uploadBodyPhoto(file){
+ if(!token||!sources.body)throw new Error('Connect Notion and share the Weight Tracker first.');
+ if(!file||!/^image\/(?:jpeg|png|webp)$/i.test(file.type))throw new Error('Notion accepts JPG, PNG, or WebP scans.');
+ if(file.size>5*1024*1024)throw new Error('The scan is over 5 MB. Compress it before attaching the photo to Notion.');
+ const created=await notion('POST','/file_uploads',{mode:'single_part',filename:String(file.name||'inbody-scan.jpg').slice(0,100),content_type:file.type});
+ if(!created.id)throw new Error('Notion did not return an upload ID.');
+ const data=new FormData();
+ data.append('file',file,file.name||'inbody-scan.jpg');
+ let response;
+ try{response=await fetch(API+'/file_uploads/'+encodeURIComponent(created.id)+'/send',{method:'POST',headers:{Authorization:'Bearer '+token,'Notion-Version':VERSION},body:data});}
+ catch(err){throw new Error('Could not send scan to Notion: '+err.message);}
+ const uploaded=await response.json().catch(()=>({}));
+ if(!response.ok||uploaded.status!=='uploaded')throw new Error('Notion photo upload failed: '+(uploaded.message||response.status));
+ return {id:created.id,name:file.name||'inbody-scan.jpg'};
+}
+window.MYOS_NOTION={route,uploadBodyPhoto,connect,disconnect,configured,connected:()=>!!token,sources:()=>({...sources}),labels:titles};
 })();
