@@ -336,7 +336,6 @@ function weightModal(){
   +'<input id="inbody-file" type="file" accept="image/jpeg,image/png,image/webp" class="form-control inbody-file-input" />'
   +'<div class="inbody-preview-row"><img id="inbody-preview" alt="Selected InBody report" hidden /><p id="inbody-status" role="status" aria-live="polite">Choose a photo to prefill your measurements.</p></div>'
   +'</div>'
-  +'<div class="source-note inbody-review-note">For Trunk Fat Mass, use the number in kg at the center of Segmental Fat Analysis, never the % underneath. Please verify all imported measurements before saving. You can still attach your original scan to the Notion weigh-in page.</div>'
   +'<div class="form-row"><div class="form-group"><label class="form-label" for="inbody-date">Scan date</label><input class="form-control" id="inbody-date" name="date" type="date" value="'+esc(S.date)+'" required></div>'
   +'<div class="form-group"><label class="form-label" for="inbody-weight">Body weight (kg) *</label><input class="form-control" id="inbody-weight" name="weight" type="number" step="0.1" min="25" max="250" placeholder="Enter weight" required></div></div>'
   +'<div class="form-row">'+field('bodyFat','Body fat percentage (PBF)',3,65)+field('bodyFatMass','Body fat mass (kg)',1,125)+'</div>'
