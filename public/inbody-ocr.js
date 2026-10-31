@@ -96,15 +96,59 @@ async function readCompositionFat(worker,bitmap,fullText,onProgress){
  }
  return null;
 }
-async function readTrunkCenter(worker,bitmap,fullText,totalFat,onProgress){
+
+function headingBasedTrunkRegion(data,width,height){
+ const lines=Array.isArray(data?.lines)&&data.lines.length?data.lines:
+  (data?.blocks||[]).flatMap(block=>(block.paragraphs||[]).flatMap(p=>p.lines||[]));
+ const matches=lines.filter(line=>line.bbox&&/segmental\s*fat\s*analysis/i.test(String(line.text||'')));
+ if(matches.length!==1)return null;
+ const b=matches[0].bbox;
+ if(!Number.isFinite(b.x0)||!Number.isFinite(b.y1))return null;
+ const center=b.x0+width*.13;
+ // The result is the FIRST number over the trunk silhouette, below the two
+ // arm measurements. A 0.02H-high crop excludes the percent directly below.
+ const region={
+  left:Math.round(center-width*.052),
+  top:Math.round(b.y1+height*.063),
+  width:Math.round(width*.105),
+  height:Math.round(height*.022)
+ };
+ if(region.left<0||region.top<0||region.left+region.width>width||region.top+region.height>height)return null;
+ return region;
+}
+function trunkRegionCandidates(data,width,height,layout){
+ const anchored=headingBasedTrunkRegion(data,width,height);
+ const ordered=layout?[layout]:['120','230'];
+ const regions=[...ordered.map(type=>profileRegions(type,width,height).trunk),...(anchored?[anchored]:[])];
+ // A nearby additional crop handles perspective distortion in phone photos.
+ for(const type of ordered){
+  const rect=profileRegions(type,width,height).trunk;
+  regions.push({...rect,left:Math.max(0,rect.left-Math.round(width*.008)),
+   top:Math.max(0,rect.top-Math.round(height*.005)),
+   width:Math.round(rect.width+width*.016),height:Math.round(rect.height+height*.010)});
+ }
+ return regions.filter(x=>x.width>40&&x.height>17);
+}
+async function readTrunkCenter(worker,bitmap,fullText,totalFat,onProgress,data,onLocated){
  const layout=inBodyLayout(fullText);
- const types=layout?[layout]:['120','230'];
- for(const type of types){
-  const region=profileRegions(type,bitmap.width,bitmap.height).trunk;
+ const regions=trunkRegionCandidates(data,bitmap.width,bitmap.height,layout);
+ onProgress('Reading the middle trunk-fat value (kg)…');
+ for(const rect of regions){
+  const observations=[];
   for(const [psm,contrast] of [[7,false],[7,true],[6,false]]){
-   const text=await recognizeRegion(worker,bitmap,region,onProgress,'Reading center trunk-fat kg value…',psm,contrast);
-   const value=centralFatFromSection(text);
-   if(plausibleTrunk(value,totalFat))return value;
+   try{
+    const text=await recognizeRegion(worker,bitmap,rect,()=>{},'',psm,contrast);
+    const result=trunkCandidate(text);
+    if(!plausibleTrunk(result?.value,totalFat))continue;
+    observations.push(result);
+    const matches=observations.filter(v=>Math.abs(v.value-result.value)<.051);
+    // A distinct kg result in the isolated center crop is sufficient.
+    // If OCR loses "kg", require two independently matching passes.
+    if((result.explicitKg&&observations.every(v=>Math.abs(v.value-result.value)<.051))||matches.length>=2){
+     if(typeof onLocated==='function')onLocated(rect);
+     return result.value;
+    }
+   }catch(e){/* Try another OCR crop; never guess from an exception. */}
   }
  }
  return null;
@@ -194,14 +238,35 @@ function smmFromSection(text){
  const values=[...new Set(candidates)];
  return values.length===1?values[0]:null;
 }
+function trunkCandidate(text){
+ const src=String(text||'').replace(/,/g,'.').replace(/(?:\r\n|\r)/g,'\n');
+ const lines=src.split('\n').map(x=>x.trim()).filter(Boolean);
+ const kg=/(\d{1,2}(?:\.\d{1,2}))\s*k[gq9o0]\b/gi;
+ const kgValues=[];
+ for(const line of lines){
+  for(const match of line.matchAll(kg)){
+   const value=Number(match[1]);
+   if(valid('segmentalFat',value))kgValues.push(value);
+  }
+ }
+ const found=[...new Set(kgValues)];
+ if(found.length===1)return {value:found[0],explicitKg:true};
+ if(found.length>1)return null; // Crop is not isolated enough.
+ // "kg" is sometimes invisible to OCR on a camera photograph. Only recover
+ // a single decimal from this SMALL, POSITION-VALIDATED center crop.
+ // Percentages are NEVER measurements in kg.
+ const candidates=[];
+ for(const line of lines){
+  if(line.includes('%'))continue;
+  const matches=[...line.matchAll(/(^|[^\d.])(\d{1,2}[.]\d{1,2})(?![\d.%])/g)]
+   .map(x=>Number(x[2])).filter(n=>valid('segmentalFat',n));
+  candidates.push(...matches);
+ }
+ const unique=[...new Set(candidates)];
+ return unique.length===1?{value:unique[0],explicitKg:false}:null;
+}
 function centralFatFromSection(text){
- const src=String(text||'').replace(/,/g,'.');
- // The crop contains only the trunk value, NOT the whole segmental chart.
- // Never turn a percentage or a neighboring arm value into kg.
- const values=[...src.matchAll(/(^|[^\d.])(\d{1,2}(?:\.\d{1,2})?)\s*k[gq9o0]\b/gim)]
-  .map(m=>Number(m[2])).filter(n=>valid('segmentalFat',n));
- const unique=[...new Set(values)];
- return unique.length===1?unique[0]:null;
+ return trunkCandidate(text)?.value??null;
 }
 
 function makeRegionCanvas(bitmap,rect,scale=3,contrast=false){
@@ -285,6 +350,7 @@ async function readBodyWeight(worker,bitmap,data){
    const result=await worker.recognize(file);
    const text=String(result?.data?.text||'');
    const values=parse(text);
+   let trunkPreview=null;
    // For photos that lose the weight row in the full-page OCR, check a
    // dedicated composition-table crop before leaving the field blank.
    let bitmap=null;
@@ -309,14 +375,17 @@ async function readBodyWeight(worker,bitmap,data){
      }catch(err){/* Keep previously read values for review. */}
      reconcileBodyFatMass(values);
      try{
-      const trunk=await readTrunkCenter(worker,bitmap,text,values.bodyFatMass,onProgress);
+      let selectedRect=null;
+      const trunk=await readTrunkCenter(worker,bitmap,text,values.bodyFatMass,onProgress,result.data,rect=>{selectedRect=rect});
       if(trunk!==null)values.segmentalFat=trunk;
+      const region=selectedRect||trunkRegionCandidates(result.data,bitmap.width,bitmap.height,inBodyLayout(text))[0];
+      if(region){try{const canvas=makeRegionCanvas(bitmap,region,4,false);trunkPreview=canvas?.toDataURL?.('image/png')||null}catch(e){/* Preview is optional. */}}
      }catch(err){/* Leave trunk fat blank rather than guessing. */}
     }
    }finally{bitmap?.close?.();}
    reconcileBodyFatMass(values);
-   return {values,text,confidence:result?.data?.confidence??null};
+   return {values,text,confidence:result?.data?.confidence??null,trunkPreview};
   }finally{if(worker)await worker.terminate();}
  }
- window.MYOS_INBODY={parse,scan,centralFatFromSection,weightFromText,bodyFatMassFromText,reconcileBodyFatMass,profileRegions,inBodyLayout,plausibleTrunk,muscleRegion,smmFromSection};
+ window.MYOS_INBODY={parse,scan,trunkCandidate,centralFatFromSection,trunkRegionCandidates,headingBasedTrunkRegion,weightFromText,bodyFatMassFromText,reconcileBodyFatMass,profileRegions,inBodyLayout,plausibleTrunk,muscleRegion,smmFromSection};
 })();
