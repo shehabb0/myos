@@ -170,3 +170,14 @@ html[data-theme="dark"] .weight-chart-point.is-active .chart-dot{stroke:#c8f29f;
 html[data-theme="dark"] .weight-tooltip-change{color:#b4dfa5}
 html[data-theme="dark"] .weight-tooltip-change[data-direction="up"]{color:#f0bf8a}
 @media(max-width:540px){.weight-chart-tooltip{min-width:150px;padding:10px 12px}.weight-tooltip-value{font-size:22px}.weight-chart-help{text-align:center}}
+
+/* Body-fat percentage trend: an interactive companion to the weight chart. */
+.chart-holder[data-metric="fat"] .chart-line{stroke:#d6a16c}
+.chart-holder[data-metric="fat"] .chart-area{fill:url(#areaFill-fat)}
+.chart-holder[data-metric="fat"] .chart-dot{stroke:#d6a16c}
+.chart-holder[data-metric="fat"] .weight-chart-halo{fill:#d6a16c;stroke:#d6a16c}
+.chart-holder[data-metric="fat"] .weight-chart-guide{stroke:#c59567}
+.chart-holder[data-metric="fat"] .weight-chart-point.is-active .chart-dot{stroke:#b87b48;fill:#f3c38e}
+html[data-theme="dark"] .chart-holder[data-metric="fat"] .chart-line{stroke:#ecc08e}
+html[data-theme="dark"] .chart-holder[data-metric="fat"] .chart-dot{stroke:#ecc08e}
+html[data-theme="dark"] .chart-holder[data-metric="fat"] .weight-chart-point.is-active .chart-dot{fill:#c99253;stroke:#ffd1a2}
