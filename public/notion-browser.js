@@ -206,10 +206,33 @@ async function route(url,options={}){
    if(!Number.isFinite(value)||value<min||value>max)throw new Error('Please check the '+field+' value.');
    properties[field]=prop('number',key==='bodyFat'?value/100:value);
   }
-  return {ok:true,entry:normalize(await notion('POST','/pages',{parent:{type:'data_source_id',data_source_id:uuid(sources.body)},properties}))};
+  // Attach the image INSIDE the weigh-in page; no photo property is required.
+  const children=b.photoUploadId?()=>{
+   const id=String(b.photoUploadId);
+   if(!/^[0-9a-f-]{32,36}$/i.test(id))throw new Error('Invalid photo upload ID.');
+   return [{object:'block',type:'image',image:{type:'file_upload',file_upload:{id}}}];
+  }:null;
+  const body={parent:{type:'data_source_id',data_source_id:uuid(sources.body)},properties};
+  if(children)body.children=children();
+  return {ok:true,entry:normalize(await notion('POST','/pages',body)),photoAttached:!!children};
  }
  throw new Error('Unknown request');
 }
 
-window.MYOS_NOTION={route,connect,disconnect,configured,connected:()=>!!token,sources:()=>({...sources}),labels:titles};
+async function uploadBodyPhoto(file){
+ if(!token||!sources.body)throw new Error('Connect Notion and share the Weight Tracker first.');
+ if(!file||!/^image\/(?:jpeg|png|webp)$/i.test(file.type))throw new Error('Notion accepts JPG, PNG, or WebP scans.');
+ if(file.size>5*1024*1024)throw new Error('The scan is over 5 MB. Compress it before attaching the photo to Notion.');
+ const created=await notion('POST','/file_uploads',{mode:'single_part',filename:String(file.name||'inbody-scan.jpg').slice(0,100),content_type:file.type});
+ if(!created.id)throw new Error('Notion did not return an upload ID.');
+ const data=new FormData();
+ data.append('file',file,file.name||'inbody-scan.jpg');
+ let response;
+ try{response=await fetch(API+'/file_uploads/'+encodeURIComponent(created.id)+'/send',{method:'POST',headers:{Authorization:'Bearer '+token,'Notion-Version':VERSION},body:data});}
+ catch(err){throw new Error('Could not send scan to Notion: '+err.message);}
+ const uploaded=await response.json().catch(()=>({}));
+ if(!response.ok||uploaded.status!=='uploaded')throw new Error('Notion photo upload failed: '+(uploaded.message||response.status));
+ return {id:created.id,name:file.name||'inbody-scan.jpg'};
+}
+window.MYOS_NOTION={route,uploadBodyPhoto,connect,disconnect,configured,connected:()=>!!token,sources:()=>({...sources}),labels:titles};
 })();

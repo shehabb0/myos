@@ -207,7 +207,7 @@ async function importInbodyPhoto(file){
   status.textContent='Automatic reading failed: '+error.message+' You can enter the results manually.';
  }finally{inbodyScanning=false;if(submit.isConnected)submit.disabled=false;}
 }
-async function logWeight(values){
+async function logWeight(values,file,attachPhoto){
  if(S.busy||inbodyScanning)return;
  S.busy=true;
  const submit=$('#weight-form button[type="submit"]');
@@ -216,6 +216,15 @@ async function logWeight(values){
   if(S.mode==='notion'){
    const check=await post('/api/weight/check',{date:values.date});
    if(check.exists)throw new Error('A weigh-in is already saved on '+values.date+'. Open the Notion Weight Tracker to edit it instead of creating a duplicate.');
+   if(file&&attachPhoto){
+    try{
+     const photo=await window.MYOS_NOTION.uploadBodyPhoto(file);
+     values.photoUploadId=photo.id;
+    }catch(error){
+     // Never silently discard a selected photo.
+     if(!window.confirm('The InBody photo could not be attached to Notion:\n\n'+error.message+'\n\nSave the measurements without the photo?'))return;
+    }
+   }
    const result=await post('/api/weight',values);
    S.data.body.push(result.entry);
   }else{
@@ -230,7 +239,7 @@ async function logWeight(values){
    });
    saveDemo();
   }
-  closeModal();render();toast('Weigh-in saved');
+  closeModal();render();toast('Weigh-in saved'+(values.photoUploadId?' with attached InBody photo':'')+'.');
  }catch(error){toast(error.message,true);}
  finally{S.busy=false;const button=$('#weight-form button[type="submit"]');if(button)button.disabled=false;}
 }
@@ -325,13 +334,15 @@ function weightModal(){
   +'<div class="inbody-upload"><label class="form-label" for="inbody-file">InBody report photo (optional)</label>'
   +'<input id="inbody-file" type="file" accept="image/jpeg,image/png,image/webp" class="form-control inbody-file-input" />'
   +'<div class="inbody-preview-row"><img id="inbody-preview" alt="Selected InBody report" hidden /><p id="inbody-status" role="status" aria-live="polite">Choose a photo to prefill your measurements.</p></div></div>'
-  +'<div class="source-note inbody-review-note">Only the fields in your current Notion Weight Tracker are used. Review the imported numbers before saving. The photo is processed locally and is not saved to Notion.</div>'
+  +'<div class="source-note inbody-review-note">Only the fields in your current Notion Weight Tracker are used. Review the imported numbers before saving. The photo is read locally and can optionally be attached inside the weigh-in page in Notion. It will not add extra tracker columns.</div>'
   +'<div class="form-row"><div class="form-group"><label class="form-label" for="inbody-date">Scan date</label><input class="form-control" id="inbody-date" name="date" type="date" value="'+esc(S.date)+'" required></div>'
   +'<div class="form-group"><label class="form-label" for="inbody-weight">Body weight (kg) *</label><input class="form-control" id="inbody-weight" name="weight" type="number" step="0.1" min="25" max="250" placeholder="62.7" required></div></div>'
   +'<div class="form-row">'+field('bodyFat','Body fat percentage (PBF)',3,65)+field('bodyFatMass','Body fat mass (kg)',1,125)+'</div>'
   +'<div class="form-row">'+field('muscleMass','Skeletal muscle mass (SMM)',5,85)+field('bodyWater','Total body water (L)',10,90)+'</div>'
   +'<div class="form-row">'+field('absFatMass','Abs fat mass (kg)',0,50)+'</div>'
   +'<details class="inbody-extra"><summary>Optional body measurements</summary><div class="form-row">'+field('waist','Waist (cm)',20,250)+field('arm','Arm (cm)',10,80)+'</div></details>'
+  +'<label class="inbody-attach-option"><input type="checkbox" name="attachPhoto" '+(S.mode==='notion'?'checked':'disabled')+'> Attach original InBody photo to the Notion weigh-in page</label>'
+  +(S.mode!=='notion'?'<p class="page-subtitle">Connect Notion to enable photo attachment.</p>':'')
   +'<div class="form-actions"><button type="button" data-action="close-modal" class="btn btn-outline">Cancel</button><button type="submit" class="btn btn-accent">'+icon('check')+' Save weigh-in</button></div>'
   +'</form>'
  );
@@ -367,7 +378,7 @@ document.addEventListener('submit',async e=>{if(!['food-form','plan-form','weigh
   const raw=String(fd.get(key)||'').trim();
   if(raw!=='')measure[key]=Number(raw);
  }
- await logWeight(measure);
+ await logWeight(measure,inbodyFile,fd.get('attachPhoto')==='on');
 }if(form.id==='connect-form'){try{const mapping={};for(const k of Object.keys(window.MYOS_NOTION.labels)){const v=String(fd.get('source-'+k)||'').trim();if(v)mapping[k]=v;}await window.MYOS_NOTION.connect(fd.get('token'),mapping,fd.get('remember')==='on');closeModal();await refresh();if(S.mode==='notion')toast('Connected to Notion');}catch(err){toast(err.message,true);}}});
 document.addEventListener('change',async e=>{const el=e.target;if(el.id==='inbody-file'){await importInbodyPhoto(el.files?.[0]);return;}if(el.matches('[data-goal-status]'))await changeGoalStatus(el.dataset.goalStatus,el.value);});
 document.addEventListener('input',e=>{if(e.target.id==='exercise-search'){S.search=e.target.value;const matched=(S.data.exercises||[]).filter(x=>(S.filter==='All'||x.PPL===S.filter)&&((x.Name||'').toLowerCase().includes(S.search.toLowerCase())||(x['Main Focus']||'').toLowerCase().includes(S.search.toLowerCase())));$('#exercise-grid').innerHTML=exerciseCards(matched);}if(e.target.id==='food-search-inline'){S.search=e.target.value;$('#food-library-list').innerHTML=foodLibraryList();}});
