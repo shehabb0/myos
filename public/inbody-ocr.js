@@ -11,7 +11,7 @@
   return Number.isFinite(value)&&value>=ranges[key][0]&&value<=ranges[key][1];
  };
  const rules=[
-  ['bodyFatMass',/^\s*(?:for storing excess energy\s*)?(?:body\s*fat\s*mass|fat\s*mass)\s*(?:\(?kg\)?)?\s*[:\-]?\s*/i],
+  // Body Fat Mass uses the measured (not reference / chart scale) value.
   // Skeletal muscle mass is read separately from the dedicated graph region.
   // The full line includes chart tick numbers, which are NOT SMM.
   ['bodyFat',/^\s*(?:pbf|percent\s*body\s*fat|body\s*fat\s*\(%\)|body\s*fat\s*percentage|percentage\s*body\s*fat)\s*(?:\(?%\)?)?\s*[:\-]?\s*/i],
@@ -19,6 +19,96 @@
   // with the 50.9-68.9 kg reference range. Trunk fat is read ONLY from
   // the kg-labelled center of its chart, never from general text.
  ];
+
+
+function bodyFatMassFromText(text){
+ const lines=String(text||'').split(/\r?\n/);
+ const graph=lines.findIndex(line=>/muscle[\s-]*fat\s*analysis/i.test(line));
+ const head=lines.findIndex(line=>/body\s*composition\s*analysis/i.test(line));
+ const begin=head>=0?head:0;
+ const end=graph>begin?graph:Math.min(lines.length,begin+20);
+ const candidates=[];
+ for(let i=begin;i<end;i++){
+  const line=lines[i];
+  const match=/body\s*fat\s*mass/i.exec(line);
+  if(!match)continue;
+  let tail=line.slice(match.index+match[0].length);
+  // Remove the unit and ignore everything inside reference-range brackets.
+  tail=tail.replace(/^\s*\(?\s*k[gq]\s*\)?/i,'').split(/[({|~]/)[0];
+  const nums=[...tail.matchAll(/(^|[^\d.])(\d{1,2}[.,]\d{1,2})(?![\d.])/g)]
+     .map(m=>Number(m[2].replace(',','.'))).filter(v=>valid('bodyFatMass',v));
+  if(nums.length===1)candidates.push(nums[0]);
+ }
+ return candidates.length?candidates[0]:null;
+}
+function reconcileBodyFatMass(values){
+ const measured=values.bodyFatMass;
+ const weight=values.weight,bodyFat=values.bodyFat;
+ if(!valid('weight',weight)||!valid('bodyFat',bodyFat))return;
+ const estimate=Math.round(weight*bodyFat)/100; // weight * PBF / 100, 2 decimal places.
+ const rounded=Math.round(estimate*10)/10;
+ if(!valid('bodyFatMass',rounded))return;
+ // BIA reports round mass to 0.1 kg. If OCR captured a chart tick or a
+ // reference-range value instead, use the consistent rounded calculation.
+ if(measured==null||Math.abs(measured-rounded)>.35){
+  values.bodyFatMass=rounded;
+  values.bodyFatMassCalculated=true;
+ }
+}
+function inBodyLayout(text){
+ const t=String(text||'').replace(/\s+/g,'');
+ return /inbody120/i.test(t)?'120':/inbody230/i.test(t)?'230':null;
+}
+function profileRegions(type,width,height){
+ const r=(l,t,w,h)=>({left:Math.round(l*width),top:Math.round(t*height),width:Math.round(w*width),height:Math.round(h*height)});
+ // Pixel positions were checked against the two photographed reports.
+ return type==='120'?
+  {fat:r(.210,.237,.345,.024),trunk:r(.425,.671,.068,.0195)}:
+  {fat:r(.210,.216,.345,.024),trunk:r(.431,.64375,.072,.024)};
+}
+function plausibleTrunk(value,totalFat){
+ if(value==null||!valid('segmentalFat',value))return false;
+ // Trunk mass cannot exceed whole-body fat mass. The lower guard also
+ // excludes the much smaller arm values if a neighboring chart was cropped.
+ if(valid('bodyFatMass',totalFat)&& (value>totalFat || value<totalFat*.23))return false;
+ return true;
+}
+async function recognizeRegion(worker,bitmap,rect,onProgress,label,psm=7,contrast=false){
+ if(!rect||!Number.isFinite(rect.left)||rect.width<25||rect.height<15)return '';
+ onProgress(label);
+ if(typeof worker.setParameters==='function')
+  await worker.setParameters({tessedit_pageseg_mode:String(psm)});
+ const canvas=makeRegionCanvas(bitmap,rect,4,contrast);
+ if(!canvas)return '';
+ const res=await worker.recognize(canvas);
+ return String(res?.data?.text||'');
+}
+async function readCompositionFat(worker,bitmap,fullText,onProgress){
+ const layout=inBodyLayout(fullText);
+ const types=layout?[layout]:['120','230'];
+ for(const type of types){
+  const region=profileRegions(type,bitmap.width,bitmap.height).fat;
+  for(const psm of [7,6]){
+   const text=await recognizeRegion(worker,bitmap,region,onProgress,'Reading Body Fat Mass…',psm,false);
+   const value=bodyFatMassFromText('Body Composition Analysis\n'+text);
+   if(value!=null)return value;
+  }
+ }
+ return null;
+}
+async function readTrunkCenter(worker,bitmap,fullText,totalFat,onProgress){
+ const layout=inBodyLayout(fullText);
+ const types=layout?[layout]:['120','230'];
+ for(const type of types){
+  const region=profileRegions(type,bitmap.width,bitmap.height).trunk;
+  for(const [psm,contrast] of [[7,false],[7,true],[6,false]]){
+   const text=await recognizeRegion(worker,bitmap,region,onProgress,'Reading center trunk-fat kg value…',psm,contrast);
+   const value=centralFatFromSection(text);
+   if(plausibleTrunk(value,totalFat))return value;
+  }
+ }
+ return null;
+}
 
 function weightFromText(text){
  const lines=String(text||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
@@ -80,33 +170,9 @@ function weightFromText(text){
    }
   }
   values.weight=weightFromText(text);
+  values.bodyFatMass=bodyFatMassFromText(text);
   return values;
  }
-
-// Find the RIGHT Segmental Fat Analysis panel, not Segmental Lean Analysis.
-function fatAnalysisRectangle(data,width,height){
- const blocks=Array.isArray(data?.blocks)?data.blocks:[];
- const blockLines=blocks.flatMap(block=>(block.paragraphs||[]).flatMap(p=>p.lines||[]));
- const lines=Array.isArray(data?.lines)&&data.lines.length?data.lines:blockLines;
- const clean=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
- let title=lines.find(line=>/segmental\s*fat\s*analysis/i.test(clean(line.text))&&line.bbox);
- if(!title){
-  title=lines.find((line,i)=>{
-   if(!line.bbox||!/segmental\s*fat/i.test(clean(line.text)))return false;
-   return /analysis/i.test(clean(line.text))||lines.slice(i+1,i+3).some(n=>/analysis/i.test(clean(n.text))&&n.bbox&&Math.abs(n.bbox.y0-line.bbox.y0)<height*.04);
-  });
- }
- if(!title)return null;
- const bbox=title.bbox;
- if(!Number.isFinite(bbox.x0)||!Number.isFinite(bbox.y1))return null;
- const left=Math.max(0,Math.floor(bbox.x0-width*.014));
- const top=Math.min(height-1,Math.max(0,Math.floor(bbox.y1+height*.003)));
- const w=Math.min(width-left,Math.ceil(width*.32));
- const h=Math.min(height-top,Math.ceil(height*.24));
- if(w<60||h<90)return null;
- return {top,left,width:w,height:h};
-}
-
 
 // Chart coordinates are calculated from the full-size report and refined by
 // headings where available. Both InBody120 and InBody230 put the SMM number
@@ -128,31 +194,16 @@ function smmFromSection(text){
  const values=[...new Set(candidates)];
  return values.length===1?values[0]:null;
 }
-function trunkFatRectangle(data,width,height){
- const blocks=Array.isArray(data?.blocks)?data.blocks:[];
- const lines=Array.isArray(data?.lines)&&data.lines.length?data.lines:
-  blocks.flatMap(b=>(b.paragraphs||[]).flatMap(p=>p.lines||[]));
- const heading=lines.find(line=>line.bbox&&/segmental\s*fat\s*analysis/i.test(String(line.text||'')));
- if(!heading||!Number.isFinite(heading.bbox.x0)||!Number.isFinite(heading.bbox.y1))return null;
- // The center TRUNK result is much lower than the section heading. The old
- // rectangle stopped above it, and sometimes read the nearby percentage.
- const center=heading.bbox.x0+width*.130;
- const left=Math.max(0,Math.round(center-width*.07));
- const top=Math.max(0,Math.round(heading.bbox.y1+height*.035));
- const w=Math.min(width-left,Math.round(width*.14));
- const h=Math.min(height-top,Math.round(height*.070));
- return w>=55&&h>=40?{left,top,width:w,height:h}:null;
-}
 function centralFatFromSection(text){
  const src=String(text||'').replace(/,/g,'.');
- // STRICT: only explicit "kg" measurements. OCR percentages are never kg.
- // Tolerate a few OCR variants of the unit, but not bare numbers.
- const found=[...src.matchAll(/(^|[^\d.])(\d{1,2}(?:\.\d{1,2})?)\s*k[gq9o0]\b/gim)]
+ // The crop contains only the trunk value, NOT the whole segmental chart.
+ // Never turn a percentage or a neighboring arm value into kg.
+ const values=[...src.matchAll(/(^|[^\d.])(\d{1,2}(?:\.\d{1,2})?)\s*k[gq9o0]\b/gim)]
   .map(m=>Number(m[2])).filter(n=>valid('segmentalFat',n));
- if(!found.length)return null;
- const largest=Math.max(...found);
- return found.filter(x=>x===largest).length===1?largest:null;
+ const unique=[...new Set(values)];
+ return unique.length===1?unique[0]:null;
 }
+
 function makeRegionCanvas(bitmap,rect,scale=3,contrast=false){
  const canvas=document.createElement('canvas');
  canvas.width=Math.round(rect.width*scale);canvas.height=Math.round(rect.height*scale);
@@ -207,25 +258,6 @@ async function readBodyWeight(worker,bitmap,data){
  const output=await worker.recognize(canvas);
  return weightFromText(output?.data?.text);
 }
-async function readSegmentalFat(worker,file,data,onProgress,bitmap){
- try{
-  if(typeof document==='undefined'||!document.createElement)return null;
-  const rect=trunkFatRectangle(data,bitmap.width,bitmap.height)||
-    {left:Math.round(bitmap.width*.40),top:Math.round(bitmap.height*.638),width:Math.round(bitmap.width*.14),height:Math.round(bitmap.height*.067)};
-  onProgress('Reading the trunk-fat kg value…');
-  // Read the wider middle chart first in normal contrast. This avoids
-  // cutting the 6.3kg / 7.0kg unit and differentiates it from 165.6% / 22.8%.
-  for(const [psm,highContrast] of [[6,false],[11,false],[11,true]]){
-   if(typeof worker.setParameters==='function')await worker.setParameters({tessedit_pageseg_mode:String(psm)});
-   const canvas=makeRegionCanvas(bitmap,rect,3,highContrast);
-   if(!canvas)continue;
-   const ocr=await worker.recognize(canvas);
-   const value=centralFatFromSection(ocr?.data?.text);
-   if(value!==null)return value;
-  }
-  return null;
- }catch(e){return null;}
-}
  let scriptPromise=null;
  function getTesseract(){
   if(window.Tesseract?.createWorker)return Promise.resolve(window.Tesseract);
@@ -269,12 +301,22 @@ async function readSegmentalFat(worker,file,data,onProgress,bitmap){
      values.muscleMass=null;
      const muscle=await readMuscleMass(worker,bitmap,result.data,onProgress);
      if(muscle!==null)values.muscleMass=muscle;
-     const trunk=await readSegmentalFat(worker,file,result.data,onProgress,bitmap);
-     if(trunk!==null)values.segmentalFat=trunk;
+     // The chart alone is unreliable for Fat Mass: its labels look like
+     // measured kilograms. Re-scan the composition row and cross-check PBF.
+     try{
+      const composition=await readCompositionFat(worker,bitmap,text,onProgress);
+      if(composition!==null)values.bodyFatMass=composition;
+     }catch(err){/* Keep previously read values for review. */}
+     reconcileBodyFatMass(values);
+     try{
+      const trunk=await readTrunkCenter(worker,bitmap,text,values.bodyFatMass,onProgress);
+      if(trunk!==null)values.segmentalFat=trunk;
+     }catch(err){/* Leave trunk fat blank rather than guessing. */}
     }
    }finally{bitmap?.close?.();}
+   reconcileBodyFatMass(values);
    return {values,text,confidence:result?.data?.confidence??null};
   }finally{if(worker)await worker.terminate();}
  }
- window.MYOS_INBODY={parse,scan,centralFatFromSection,trunkFatRectangle,muscleRegion,smmFromSection,weightFromText,fatAnalysisRectangle};
+ window.MYOS_INBODY={parse,scan,centralFatFromSection,weightFromText,bodyFatMassFromText,reconcileBodyFatMass,profileRegions,inBodyLayout,plausibleTrunk,muscleRegion,smmFromSection};
 })();

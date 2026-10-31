@@ -204,7 +204,7 @@ async function importInbodyPhoto(file){
     input.value=''; // Never retain a value read from another photo.
    }
   }
-  status.textContent=found?'Read '+found+' fields. Verify them against the photo before saving.'+(result.values.weight==null?' Body Weight could not be read; please enter the weight in kg.':'')+(result.values.muscleMass==null?' Skeletal Muscle Mass was not reliably recognized; enter the SMM kg value manually.':'')+(result.values.segmentalFat==null?' Trunk Fat Mass was not reliably recognized in kg; please enter the central kg value manually (not the %).':''):'No reliable values were recognized. Enter the measurements manually and check your scan.';
+  status.textContent=found?'Read '+found+' fields. Verify all values against your photo before saving.'+(result.values.bodyFatMassCalculated?' Body Fat Mass was calculated from weight and body-fat %, so check it against the printed Body Fat Mass (kg).':'')+(result.values.weight==null?' Body Weight could not be read; enter kg manually.':'')+(result.values.muscleMass==null?' Skeletal Muscle Mass could not be read; enter SMM in kg manually.':'')+(result.values.segmentalFat==null?' Trunk Fat Mass could not be read confidently; enter the central kg number from Segmental Fat Analysis (not the %).':''):'No reliable measurements were recognized. Enter the values manually from your report.';
  }catch(error){
   status.textContent='Automatic reading failed: '+error.message+' You can enter the results manually.';
  }finally{inbodyScanning=false;if(submit.isConnected)submit.disabled=false;}
